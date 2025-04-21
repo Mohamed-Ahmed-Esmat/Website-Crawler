@@ -53,6 +53,9 @@ def fetch_url(url):
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         
+        # Ensure we're using UTF-8 encoding to handle all Unicode characters
+        response.encoding = 'utf-8'
+        
         return True, response.text
     except requests.RequestException as e:
         return False, str(e)
@@ -101,15 +104,18 @@ def crawler_process():
     Process for a crawler node.
     Fetches web pages, extracts URLs, and sends results back to the master.
     """
-    comm = MPI.COMM_WORLD
-    rank = comm.Get_rank()
-    size = comm.Get_size()
+    ########comm = MPI.COMM_WORLD
+    rank = 1 # To be removed
+    ########rank = comm.Get_rank()
+    size = 2 # To be removed
+    ########size = comm.Get_size()
 
     logging.info(f"Crawler node started with rank {rank} of {size}")
 
     while True:
-        status = MPI.Status()
-        url_to_crawl = comm.recv(source=0, tag=0, status=status)  # Receive URL from master (tag 0)
+        ########status = MPI.Status()
+        url_to_crawl = 'https://httpbin.org/' # To be removed
+        ########url_to_crawl = comm.recv(source=0, tag=0, status=status)  # Receive URL from master (tag 0)
 
         if not url_to_crawl:  # Could be a shutdown signal
             logging.info(f"Crawler {rank} received shutdown signal. Exiting.")
@@ -122,7 +128,7 @@ def crawler_process():
             if not check_robots_txt(url_to_crawl):
                 error_msg = f"Crawling disallowed by robots.txt for {url_to_crawl}"
                 logging.warning(error_msg)
-                comm.send(error_msg, dest=0, tag=999)  # Report error to master
+                ########comm.send(error_msg, dest=0, tag=999)  # Report error to master
                 continue
                 
             # Fetch the web page content
@@ -131,28 +137,31 @@ def crawler_process():
             if not success:
                 error_msg = f"Failed to fetch {url_to_crawl}: {content}"
                 logging.error(error_msg)
-                comm.send(error_msg, dest=0, tag=999)  # Report error to master
+                ########comm.send(error_msg, dest=0, tag=999)  # Report error to master
                 continue
-                
+            
             # Extract links and text from the page
             extracted_urls, extracted_text = extract_content(url_to_crawl, content)
             
             logging.info(f"Crawler {rank} crawled {url_to_crawl}, extracted {len(extracted_urls)} URLs.")
 
+            print("the extracted urls are: ", [url.encode('ascii', 'replace').decode('ascii') for url in extracted_urls]) # To be removed
+            print("the extracted text is: ", extracted_text[:1000].encode('ascii', 'replace').decode('ascii') + ('...' if len(extracted_text) > 1000 else '')) # To be removed
+
             # Implement crawl delay to be polite
             time.sleep(1)  # 1 second delay between requests
 
             # --- Send extracted URLs back to master ---
-            comm.send(extracted_urls, dest=0, tag=1)  # Tag 1 for sending extracted URLs
+            ########comm.send(extracted_urls, dest=0, tag=1)  # Tag 1 for sending extracted URLs
 
             # --- Send extracted content to indexer node ---
             # Assuming indexer node ranks come after crawler node ranks
-            crawler_nodes = size - 2  # Number of crawler nodes
-            indexer_rank = 1 + crawler_nodes  # First indexer node's rank
+            ########crawler_nodes = size - 2  # Number of crawler nodes
+            ########indexer_rank = 1 + crawler_nodes  # First indexer node's rank
             
             # If we have multiple indexers, distribute the work
-            if size > 2 + crawler_nodes:  # If we have more than one indexer
-                indexer_rank = (1 + crawler_nodes) + (rank - 1) % (size - 1 - crawler_nodes)
+            ########if size > 2 + crawler_nodes:  # If we have more than one indexer
+            ########    indexer_rank = (1 + crawler_nodes) + (rank - 1) % (size - 1 - crawler_nodes)
                 
             # Send the extracted content to an indexer node
             page_data = {
@@ -160,15 +169,16 @@ def crawler_process():
                 'content': extracted_text,
                 'crawler_rank': rank
             }
-            comm.send(page_data, dest=indexer_rank, tag=2)  # Tag 2 for sending content to indexer
+            ########comm.send(page_data, dest=indexer_rank, tag=2)  # Tag 2 for sending content to indexer
 
             # Send status update to master
-            comm.send(f"Crawler {rank} - Crawled URL: {url_to_crawl} - Found {len(extracted_urls)} links", dest=0, tag=99)
+            ########comm.send(f"Crawler {rank} - Crawled URL: {url_to_crawl} - Found {len(extracted_urls)} links", dest=0, tag=99)
+            break # To be removed
 
         except Exception as e:
             error_msg = f"Crawler {rank} error crawling {url_to_crawl}: {e}"
             logging.error(error_msg)
-            comm.send(error_msg, dest=0, tag=999)  # Report error to master
+            ########comm.send(error_msg, dest=0, tag=999)  # Report error to master
 
 
 if __name__ == '__main__':
