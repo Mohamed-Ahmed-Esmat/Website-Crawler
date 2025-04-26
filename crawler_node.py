@@ -151,20 +151,15 @@ def crawler_process():
 
             # --- Send extracted content to indexer node ---
             # Assuming indexer node ranks come after crawler node ranks
-            ########crawler_nodes = size - 2  # Number of crawler nodes
-            ########indexer_rank = 1 + crawler_nodes  # First indexer node's rank
+            indexer_rank = 2  # First indexer node's rank
             
-            # If we have multiple indexers, distribute the work
-            ########if size > 2 + crawler_nodes:  # If we have more than one indexer
-            ########    indexer_rank = (1 + crawler_nodes) + (rank - 1) % (size - 1 - crawler_nodes)
-                
             # Send the extracted content to an indexer node
             page_data = {
                 'url': url_to_crawl,
                 'content': extracted_text,
                 'crawler_rank': rank
             }
-            ########comm.send(page_data, dest=indexer_rank, tag=2)  # Tag 2 for sending content to indexer
+            comm.send(page_data, dest=indexer_rank, tag=2)  # Tag 2 for sending content to indexer
 
             # Send status update to master
             comm.send(f"Crawler {rank} - Crawled URL: {url_to_crawl} - Found {len(extracted_urls)} links", dest=0, tag=99)
