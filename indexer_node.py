@@ -4,9 +4,24 @@ import logging
 import os
 import pickle
 import re
+import socket
 
-# Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - Indexer - %(levelname)s - %(message)s')
+# Configure logging with IP address
+hostname = socket.gethostname()
+try:
+    ip_address = socket.gethostbyname(hostname)
+except:
+    ip_address = "unknown-ip"
+
+logging.basicConfig(
+    level=logging.INFO,
+    format=f'%(asctime)s - {ip_address} - Indexer - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(f"indexer_{ip_address}.log"),
+        logging.StreamHandler()
+    ]
+)
+
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 
