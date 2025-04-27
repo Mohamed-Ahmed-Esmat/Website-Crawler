@@ -142,6 +142,8 @@ def crawler_process():
             
             logging.info(f"Crawler {rank} crawled {url_to_crawl}, extracted {len(extracted_urls)} URLs.")
 
+            logging.info(f"The exteracted urls are: {extracted_urls}")
+            logging.info(f"The extracted text is: {extracted_text}")
 
             # Implement crawl delay to be polite
             time.sleep(1)  # 1 second delay between requests
@@ -160,6 +162,8 @@ def crawler_process():
                 'crawler_rank': rank
             }
             comm.send(page_data, dest=indexer_rank, tag=2)  # Tag 2 for sending content to indexer
+
+            logging.info(f"Sent extracted content to indexer node {indexer_rank}")
 
             # Send status update to master
             comm.send(f"Crawler {rank} - Crawled URL: {url_to_crawl} - Found {len(extracted_urls)} links", dest=0, tag=99)
