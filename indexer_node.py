@@ -274,6 +274,15 @@ def simple_edit_distance(a, b):
 
 # --- Main Control Function ---
 def indexer_node():
+    # Get the size for logging
+    size = comm.Get_size()
+    logging.info(f"Indexer node started with rank {rank} of {size}")
+    
+    # Clear old checkpoints at startup to avoid processing stale data
+    if os.path.exists('indexer_checkpoint.pkl'):
+        os.remove('indexer_checkpoint.pkl')
+        logging.info("Removed old checkpoint file to start fresh")
+
     checkpoint = load_checkpoint()
     if checkpoint:
         state = checkpoint["state_name"]
