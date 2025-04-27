@@ -74,24 +74,29 @@ def idle_state(comm):
 def receiving_data_state(page_data, progress_point=None):
     logging.info("State: RECEIVING_DATA - Validating input...")
     try:
-        if len(content.split()) < 10:
-            logging.warning(f"Received content is too small (only {len(content.split())} words). Skipping indexing.")
+        # First check if page_data is a valid dictionary
+        if not isinstance(page_data, dict):
+            logging.warning("Received data is not a dictionary.")
             return "IDLE", None
 
-        if progress_point is None or progress_point == "received_message":
-            if not isinstance(page_data, dict):
-                logging.warning("Received data is not a dictionary.")
-                return "IDLE", None
-
+        # Extract url and content from page_data
         url = page_data.get("url")
         content = page_data.get("content")
 
+        # Now check if content is valid - MOVED THIS AFTER content IS DEFINED
+        if progress_point is None or progress_point == "received_message":
+            if len(content.split()) < 10:
+                logging.warning(f"Received content is too small (only {len(content.split())} words). Skipping indexing.")
+                return "IDLE", None
+
+        # Check if url is valid
         if (progress_point is None or progress_point == "received_message") and (not url or not isinstance(url, str)):
             logging.warning("Invalid or missing 'url'.")
             return "IDLE", None
 
         save_checkpoint("Receiving_Data", "validated_url", page_data)
 
+        # Check if content is valid
         if (progress_point is None or progress_point == "validated_url") and (not content or not isinstance(content, str)):
             logging.warning("Invalid or missing 'content'.")
             return "IDLE", None
@@ -146,28 +151,16 @@ def save_top_words(index):
 
 def indexing_state(data, progress_point=None):
     logging.info("State: INDEXING - Starting indexing process...")
-    inserted = 0
-    for word in words:
-        if word not in index:
-            index[word] = {}
-        if url not in index[word]:
-            index[word][url] = 0
-        index[word][url] += 1
-
-        inserted += 1
-        if inserted % 1000 == 0:
-            save_index(index)
-            logging.info(f"[Batch Save] Autosaved after {inserted} words.")
     try:
         url = data.get("url")
         words = data.get("words")
         
-
         if not url or not words:
             logging.warning("Missing URL or words for indexing.")
             return "IDLE", None
 
         index = load_index()
+        inserted = 0
 
         if progress_point is None or progress_point == "filtered_words":
             for word in words:
@@ -176,6 +169,11 @@ def indexing_state(data, progress_point=None):
                 if url not in index[word]:
                     index[word][url] = 0
                 index[word][url] += 1
+                
+                inserted += 1
+                if inserted % 1000 == 0:
+                    save_index(index)
+                    logging.info(f"[Batch Save] Autosaved after {inserted} words.")
 
             save_checkpoint("Indexing", "words_inserted", data)
             logging.info(f"Inserted {len(words)} words into the index.")
