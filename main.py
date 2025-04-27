@@ -2,11 +2,22 @@ from mpi4py import MPI
 import logging
 import sys
 import os
+import socket
 
 # Configure logging
+hostname = socket.gethostname()
+try:
+    ip_address = socket.gethostbyname(hostname)
+except:
+    ip_address = "unknown-ip"
+
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format=f'%(asctime)s - {ip_address} - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(f"main_{ip_address}.log"),
+        logging.StreamHandler()
+    ]
 )
 
 def main():
