@@ -1,11 +1,25 @@
 from mpi4py import MPI 
 import time 
 import logging 
+import socket
 # Import necessary libraries for task queue, database, etc. (e.g., redis, cloud storage SDKs) 
  
 # Configure logging 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - Master - %(levelname)s - %(message)s') 
- 
+hostname = socket.gethostname()
+try:
+    ip_address = socket.gethostbyname(hostname)
+except:
+    ip_address = "unknown-ip"
+    
+logging.basicConfig(
+    level=logging.INFO,
+    format=f'%(asctime)s - {ip_address} - Master - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(f"master_{ip_address}.log"),
+        logging.StreamHandler()
+    ]
+)
+
 def master_process(): 
     """ 
     Main process for the master node. 

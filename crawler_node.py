@@ -5,9 +5,23 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
+import socket
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - Crawler - %(levelname)s - %(message)s')
+hostname = socket.gethostname()
+try:
+    ip_address = socket.gethostbyname(hostname)
+except:
+    ip_address = "unknown-ip"
+
+logging.basicConfig(
+    level=logging.INFO,
+    format=f'%(asctime)s - {ip_address} - Crawler - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(f"crawler_{ip_address}.log"),
+        logging.StreamHandler()
+    ]
+)
 
 
 def check_robots_txt(url):
