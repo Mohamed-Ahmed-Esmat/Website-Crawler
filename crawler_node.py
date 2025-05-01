@@ -295,23 +295,23 @@ def crawler_process():
                 if isinstance(crawl_task, dict):
                     urls_batch = crawl_task.get("urls", [])
                     max_depth = crawl_task.get("max_depth", 3)
-                    
-                    if urls_batch:
+
+                    # Ensure `urls_batch` contains only strings (actual URLs)
+                    if urls_batch and all(isinstance(url, str) for url in urls_batch):
                         logging.info(f"Crawler {rank} received batch of {len(urls_batch)} URLs with max depth {max_depth}")
-                        # Send status update that we're beginning work
                         comm.send({
                             "status": STATUS_WORKING,
                             "message": f"Starting work on batch of {len(urls_batch)} URLs",
                             "timestamp": datetime.now().isoformat()
                         }, dest=0, tag=TAG_STATUS_UPDATE)
-                        
+
                         # Process the URLs
                         process_url_batch(urls_batch, max_depth, comm, rank)
                     else:
-                        logging.warning(f"Crawler {rank} received empty URL batch")
+                        logging.warning(f"Crawler {rank} received invalid URL batch: {urls_batch}")
                         comm.send({
                             "status": STATUS_IDLE,
-                            "error": "Received empty URL batch",
+                            "error": "Received invalid URL batch",
                             "timestamp": datetime.now().isoformat()
                         }, dest=0, tag=TAG_STATUS_UPDATE)
                         
