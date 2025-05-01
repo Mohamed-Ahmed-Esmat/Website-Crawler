@@ -2,99 +2,992 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Distributed Web Crawler Client</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Distributed Web Crawler Dashboard</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        body { font-family: Arial, sans-serif; margin: 40px; background: #f7f7f7; }
-        .container { background: #fff; padding: 30px; border-radius: 8px; max-width: 500px; margin: auto; box-shadow: 0 2px 8px #ccc; }
-        h2 { text-align: center; }
-        label { display: block; margin-top: 15px; }
-        input[type=text], input[type=number] { width: 100%; padding: 8px; margin-top: 5px; border-radius: 4px; border: 1px solid #ccc; }
-        button { margin-top: 20px; width: 100%; padding: 10px; background: #007bff; color: #fff; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; }
-        button:hover { background: #0056b3; }
-        .result, .error { margin-top: 20px; padding: 10px; border-radius: 4px; }
-        .result { background: #e6ffe6; color: #1a7f1a; }
-        .error { background: #ffe6e6; color: #b30000; }
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #1d4ed8;
+            --success-color: #059669;
+            --error-color: #dc2626;
+            --warning-color: #d97706;
+            --text-color: #1f2937;
+            --bg-color: #f3f4f6;
+            --card-bg: #ffffff;
+            --border-color: #e5e7eb;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background: var(--bg-color);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        .dashboard-header {
+            background: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+
+        .dashboard-header h1 {
+            color: var(--primary-color);
+            font-size: 1.8rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .dashboard-header p {
+            color: #6b7280;
+        }
+
+        .tab-container {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 0.5rem;
+        }
+
+        .tab-button {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            background: none;
+            color: #6b7280;
+            font-size: 1rem;
+            cursor: pointer;
+            border-radius: 0.375rem;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .tab-button:hover {
+            background: #f3f4f6;
+            color: var(--primary-color);
+        }
+
+        .tab-button.active {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--text-color);
+        }
+
+        .form-group .help-text {
+            font-size: 0.875rem;
+            color: #6b7280;
+            margin-top: 0.25rem;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        input[type="date"],
+        select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid var(--border-color);
+            border-radius: 0.375rem;
+            font-size: 1rem;
+            transition: border-color 0.2s;
+        }
+
+        input[type="text"]:focus,
+        input[type="number"]:focus,
+        input[type="date"]:focus,
+        select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 0.375rem;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--secondary-color);
+        }
+
+        .loading {
+            position: relative;
+            pointer-events: none;
+            opacity: 0.7;
+        }
+
+        .loading::after {
+            content: '';
+            position: absolute;
+            top: calc(50% - 0.5rem);
+            left: calc(50% - 0.5rem);
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid #ffffff;
+            border-right-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.75s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .result-card {
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            transition: transform 0.2s;
+        }
+
+        .result-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .result-card h3 {
+            color: var(--primary-color);
+            margin-bottom: 0.5rem;
+        }
+
+        .result-card .meta {
+            font-size: 0.875rem;
+            color: #6b7280;
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .highlight {
+            background: #fef3c7;
+            padding: 0.25rem;
+            border-radius: 0.25rem;
+        }
+
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+
+        .tooltip::before {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 0.75rem;
+            background: #1f2937;
+            color: white;
+            font-size: 0.875rem;
+            border-radius: 0.375rem;
+            white-space: pre-wrap;
+            width: max-content;
+            max-width: 300px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            z-index: 100;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+        }
+
+        .tooltip:hover::before {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .cluster-status {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+        }
+
+        .status-card {
+            background: var(--card-bg);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            border-left: 4px solid;
+        }
+
+        .status-card.healthy { border-left-color: var(--success-color); }
+        .status-card.warning { border-left-color: var(--warning-color); }
+        .status-card.error { border-left-color: var(--error-color); }
+
+        @media (max-width: 768px) {
+            .container { padding: 1rem; }
+            .search-filters { grid-template-columns: 1fr; }
+            .cluster-status { grid-template-columns: 1fr; }
+        }
+
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .help-text {
+            font-size: 0.875rem;
+            color: #6b7280;
+            margin-top: 0.25rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .form-group {
+            position: relative;
+            margin-bottom: 1.5rem;
+        }
+
+        .suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 0.375rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            z-index: 50;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .suggestions li {
+            padding: 0.75rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .suggestions li:hover {
+            background-color: #f3f4f6;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h2>Distributed Web Crawler Client</h2>
-        <form id="crawlForm">
-            <label for="master_url">Master Node URL:</label>
-            <input type="text" id="master_url" name="master_url" placeholder="http://<master-ip>:5000" required>
+        <div class="dashboard-header">
+            <h1>
+                <i class="fas fa-spider"></i>
+                Distributed Web Crawler Dashboard
+            </h1>
+            <p>Monitor and control your distributed web crawling system</p>
+        </div>
 
-            <label for="query">Seed URL:</label>
-            <input type="text" id="query" name="query" placeholder="https://example.com" required>
+        <div class="tab-container">
+            <button class="tab-button" data-tab="crawl" onclick="showTab('crawl')">
+                <i class="fas fa-robot"></i> Crawl
+            </button>
+            <button class="tab-button" data-tab="search" onclick="showTab('search')">
+                <i class="fas fa-search"></i> Search
+            </button>
+            <button class="tab-button" data-tab="monitor" onclick="showTab('monitor')">
+                <i class="fas fa-chart-line"></i> Monitor
+            </button>
+        </div>
 
-            <label for="max_depth">Max Depth:</label>
-            <input type="number" id="max_depth" name="max_depth" value="3" min="1" max="10">
+        <div id="crawl" class="tab-content">
+            <div class="card">
+                <h2><i class="fas fa-robot"></i> Start New Crawl</h2>
+                <form id="crawlForm">
+                    <div class="form-group">
+                        <label for="master_url">
+                            <i class="fas fa-server"></i> Master Node URL
+                            <span class="tooltip" data-tooltip="Example: http://localhost:5000 - The URL where your master node is running">
+                                <i class="fas fa-info-circle"></i>
+                            </span>
+                        </label>
+                        <input type="text" id="master_url" name="master_url" 
+                               placeholder="http://<master-ip>:5000" required>
+                        <div class="help-text">The address of your master node server</div>
+                    </div>
 
-            <button type="submit">Submit Crawl Task</button>
-        </form>
-        <div id="response" class="result" style="display:none;"></div>
-        <div id="error" class="error" style="display:none;"></div>
+                    <div class="form-group">
+                        <label for="query">
+                            <i class="fas fa-link"></i> Seed URL
+                            <span class="tooltip" data-tooltip="Example: https://www.python.org - Enter a full URL including https://">
+                                <i class="fas fa-info-circle"></i>
+                            </span>
+                        </label>
+                        <input type="text" id="query" name="query" 
+                               placeholder="https://example.com" required>
+                        <div class="help-text">The website where crawling will begin</div>
+                    </div>
 
-        <form id="searchForm" style="margin-top: 30px;">
-            <label for="search_query">Search Query:</label>
-            <input type="text" id="search_query" name="search_query" placeholder="Enter search query" required>
+                    <div class="form-group">
+                        <label for="max_depth">
+                            <i class="fas fa-level-down-alt"></i> Max Depth
+                            <span class="tooltip" data-tooltip="Example: 3 - A depth of 3 means it will follow links up to 3 clicks away from the start page">
+                                <i class="fas fa-info-circle"></i>
+                            </span>
+                        </label>
+                        <input type="number" id="max_depth" name="max_depth" 
+                               value="3" min="1" max="10">
+                        <div class="help-text">Higher values will crawl more pages but take longer</div>
+                    </div>
 
-            <button type="submit">Submit Search Query</button>
-        </form>
-        <div id="search_response" class="result" style="display:none;"></div>
-        <div id="search_error" class="error" style="display:none;"></div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-play"></i> Start Crawling
+                    </button>
+                </form>
+            </div>
+            <div id="crawl_response" class="card" style="display:none;"></div>
+            <div id="crawl_error" class="card" style="display:none;"></div>
+        </div>
+
+        <div id="search" class="tab-content">
+            <div class="card">
+                <h2><i class="fas fa-search"></i> Search</h2>
+                <form id="searchForm">
+                    <div class="search-filters">
+                        <div class="form-group">
+                            <label for="search_query">
+                                <i class="fas fa-keyboard"></i> Search Query
+                                <span class="tooltip" data-tooltip="Examples:&#10;Keyword: machine learning&#10;Phrase: &quot;artificial intelligence&quot;&#10;Fuzzy: progamming (will match 'programming')&#10;Wildcard: py* (will match python, pytest, etc)">
+                                    <i class="fas fa-info-circle"></i>
+                                </span>
+                            </label>
+                            <input type="text" id="search_query" name="search_query" 
+                                   placeholder="Enter search terms..." required>
+                            <ul id="suggestions" class="suggestions"></ul>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="search_type">
+                                <i class="fas fa-filter"></i> Search Type
+                                <span class="tooltip" data-tooltip="Keyword: Basic word matching&#10;Phrase: Exact phrase matching&#10;Fuzzy: Tolerates typos&#10;Wildcard: Use * and ? as wildcards">
+                                    <i class="fas fa-info-circle"></i>
+                                </span>
+                            </label>
+                            <select id="search_type" name="search_type">
+                                <option value="keyword">Keyword Search</option>
+                                <option value="phrase">Exact Phrase</option>
+                                <option value="fuzzy">Fuzzy Search</option>
+                                <option value="wildcard">Wildcard Search</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="from_date">
+                                <i class="fas fa-calendar-alt"></i> From Date
+                                <span class="tooltip" data-tooltip="Example: 2025-01-01 - Filter results from this date onwards">
+                                    <i class="fas fa-info-circle"></i>
+                                </span>
+                            </label>
+                            <input type="date" id="from_date" name="from_date">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="to_date">
+                                <i class="fas fa-calendar-alt"></i> To Date
+                                <span class="tooltip" data-tooltip="Example: 2025-05-01 - Filter results up to this date">
+                                    <i class="fas fa-info-circle"></i>
+                                </span>
+                            </label>
+                            <input type="date" id="to_date" name="to_date">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="domain">
+                                <i class="fas fa-globe"></i> Domain Filter
+                                <span class="tooltip" data-tooltip="Example: python.org - Only show results from this domain">
+                                    <i class="fas fa-info-circle"></i>
+                                </span>
+                            </label>
+                            <input type="text" id="domain" name="domain" 
+                                   placeholder="e.g., example.com">
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search"></i> Search
+                    </button>
+                </form>
+            </div>
+            <div id="search_results"></div>
+            <div id="facets" class="facets"></div>
+            <div id="pagination" class="pagination"></div>
+            <div id="search_error" class="card" style="display:none;"></div>
+        </div>
+
+        <div id="monitor" class="tab-content">
+            <div class="card">
+                <h2><i class="fas fa-chart-line"></i> Cluster Health Monitor</h2>
+                <div class="cluster-status">
+                    <div id="local-cluster-status"></div>
+                    <div id="remote-clusters-status"></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2><i class="fas fa-search"></i> Cross-Cluster Search</h2>
+                <form id="crossClusterSearchForm">
+                    <div class="search-filters">
+                        <div class="form-group">
+                            <label for="cross_search_query">
+                                <i class="fas fa-keyboard"></i> Search Query
+                                <span class="tooltip" data-tooltip="Enter your search terms">
+                                    <i class="fas fa-info-circle"></i>
+                                </span>
+                            </label>
+                            <input type="text" id="cross_search_query" name="cross_search_query" 
+                                   placeholder="Enter search terms..." required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="cross_search_type">
+                                <i class="fas fa-filter"></i> Search Type
+                                <span class="tooltip" data-tooltip="Choose the type of search">
+                                    <i class="fas fa-info-circle"></i>
+                                </span>
+                            </label>
+                            <select id="cross_search_type" name="cross_search_type">
+                                <option value="keyword">Keyword Search</option>
+                                <option value="phrase">Exact Phrase</option>
+                                <option value="fuzzy">Fuzzy Search</option>
+                                <option value="wildcard">Wildcard Search</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Clusters to Search:</label>
+                            <div id="cluster-checkboxes" class="cluster-selection">
+                                <!-- Dynamically populated -->
+                            </div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search"></i> Search Across Clusters
+                    </button>
+                </form>
+            </div>
+            <div id="cross_search_results"></div>
+            <div id="cross_search_error" class="card" style="display:none;"></div>
+        </div>
     </div>
+
     <script>
+        let currentPage = 1;
+        const PAGE_SIZE = 10;
+        let totalResults = 0;
+        let suggestionTimeout = null;
+
+        function showTab(tabId) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+                content.style.display = 'none';
+            });
+            
+            // Remove active class from all buttons
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.classList.remove('active');
+            });
+            
+            // Show selected tab content with animation
+            const selectedTab = document.getElementById(tabId);
+            selectedTab.style.display = 'block';
+            // Force a reflow to ensure the animation works
+            void selectedTab.offsetWidth;
+            selectedTab.classList.add('active');
+            
+            // Add active class to clicked button
+            document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
+            
+            // Clear any existing search results when switching tabs
+            if (tabId !== 'search') {
+                document.getElementById('search_results').innerHTML = '';
+                document.getElementById('facets').innerHTML = '';
+                document.getElementById('pagination').innerHTML = '';
+                document.getElementById('search_error').style.display = 'none';
+            }
+        }
+
+        // Set initial tab based on URL hash or default to 'crawl'
+        document.addEventListener('DOMContentLoaded', function() {
+            const hash = window.location.hash.substring(1) || 'crawl';
+            showTab(hash);
+            
+            // Add input validation
+            document.querySelectorAll('input[type="url"]').forEach(input => {
+                input.addEventListener('input', function() {
+                    if (this.value && !isValidUrl(this.value)) {
+                        this.setCustomValidity('Please enter a valid URL');
+                    } else {
+                        this.setCustomValidity('');
+                    }
+                });
+            });
+
+            // Set today as the default max date for date inputs
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('to_date').max = today;
+            document.getElementById('from_date').max = today;
+        });
+
+        // Update URL hash when switching tabs
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.addEventListener('click', function() {
+                const tabId = this.getAttribute('data-tab');
+                window.location.hash = tabId;
+            });
+        });
+
+        function setLoading(buttonElement, isLoading) {
+            if (isLoading) {
+                buttonElement.classList.add('loading');
+                buttonElement.disabled = true;
+            } else {
+                buttonElement.classList.remove('loading');
+                buttonElement.disabled = false;
+            }
+        }
+
         document.getElementById('crawlForm').onsubmit = async function(e) {
             e.preventDefault();
-            document.getElementById('response').style.display = 'none';
-            document.getElementById('error').style.display = 'none';
-            const master_url = document.getElementById('master_url').value;
-            const query = document.getElementById('query').value;
-            const max_depth = document.getElementById('max_depth').value;
-            const formData = new FormData();
-            formData.append('master_url', master_url);
-            formData.append('query', query);
-            formData.append('max_depth', max_depth);
+            const submitButton = e.target.querySelector('button[type="submit"]');
+            setLoading(submitButton, true);
+            
+            document.getElementById('crawl_response').style.display = 'none';
+            document.getElementById('crawl_error').style.display = 'none';
+            
             try {
+                const formData = new FormData(e.target);
                 const res = await fetch('/submit', {
                     method: 'POST',
                     body: formData
                 });
                 const data = await res.json();
+                
                 if (res.ok) {
-                    document.getElementById('response').innerText = data.message || JSON.stringify(data);
-                    document.getElementById('response').style.display = 'block';
+                    const responseDiv = document.getElementById('crawl_response');
+                    responseDiv.innerHTML = `
+                        <div class="success-message">
+                            <i class="fas fa-check-circle"></i>
+                            ${data.message}
+                        </div>
+                    `;
+                    responseDiv.style.display = 'block';
                 } else {
-                    document.getElementById('error').innerText = data.error || 'Unknown error';
-                    document.getElementById('error').style.display = 'block';
+                    const errorDiv = document.getElementById('crawl_error');
+                    errorDiv.innerHTML = `
+                        <div class="error-message">
+                            <i class="fas fa-exclamation-circle"></i>
+                            ${data.error}
+                        </div>
+                    `;
+                    errorDiv.style.display = 'block';
                 }
             } catch (err) {
-                document.getElementById('error').innerText = 'Request failed: ' + err;
-                document.getElementById('error').style.display = 'block';
+                const errorDiv = document.getElementById('crawl_error');
+                errorDiv.innerHTML = `
+                    <div class="error-message">
+                        <i class="fas fa-exclamation-circle"></i>
+                        Request failed: ${err}
+                    </div>
+                `;
+                errorDiv.style.display = 'block';
+            } finally {
+                setLoading(submitButton, false);
             }
         };
 
         document.getElementById('searchForm').onsubmit = async function(e) {
             e.preventDefault();
-            document.getElementById('search_response').style.display = 'none';
-            document.getElementById('search_error').style.display = 'none';
+            await performSearch(1);
+        };
+
+        async function performSearch(page) {
             const master_url = document.getElementById('master_url').value;
-            const search_query = document.getElementById('search_query').value;
+            const query = document.getElementById('search_query').value;
+            const searchType = document.getElementById('search_type').value;
+            const fromDate = document.getElementById('from_date').value;
+            const toDate = document.getElementById('to_date').value;
+            const domain = document.getElementById('domain').value;
+
             try {
-                const res = await fetch(`/search?master_url=${encodeURIComponent(master_url)}&query=${encodeURIComponent(search_query)}`);
+                const params = new URLSearchParams({
+                    master_url,
+                    query,
+                    type: searchType,
+                    page: page,
+                    page_size: PAGE_SIZE
+                });
+                
+                if (fromDate) params.append('from_date', fromDate);
+                if (toDate) params.append('to_date', toDate);
+                if (domain) params.append('domain', domain);
+
+                const res = await fetch(`/search?${params}`);
                 const data = await res.json();
+                
                 if (res.ok) {
-                    document.getElementById('search_response').innerText = JSON.stringify(data);
-                    document.getElementById('search_response').style.display = 'block';
+                    displayResults(data);
+                    displayFacets(data.facets);
+                    displayPagination(data.total, page);
                 } else {
-                    document.getElementById('search_error').innerText = data.error || 'Unknown error';
+                    document.getElementById('search_error').innerText = data.error;
                     document.getElementById('search_error').style.display = 'block';
                 }
             } catch (err) {
-                document.getElementById('search_error').innerText = 'Request failed: ' + err;
+                document.getElementById('search_error').innerText = 'Search failed: ' + err;
                 document.getElementById('search_error').style.display = 'block';
             }
+        }
+
+        function displayResults(data) {
+            const resultsDiv = document.getElementById('search_results');
+            resultsDiv.innerHTML = '';
+
+            if (data.results.length === 0) {
+                resultsDiv.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-search"></i>
+                        <p>No results found.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const resultsList = document.createElement('div');
+            resultsList.className = 'results-list';
+            
+            data.results.forEach(result => {
+                const resultItem = document.createElement('div');
+                resultItem.className = 'result-card';
+
+                resultItem.innerHTML = `
+                    <h3>
+                        <i class="fas fa-globe"></i>
+                        <a href="${result.url}" target="_blank" rel="noopener noreferrer">
+                            ${result.url}
+                        </a>
+                    </h3>
+                    <div class="meta">
+                        <span><i class="fas fa-star"></i> Score: ${result.score.toFixed(2)}</span>
+                        <span><i class="fas fa-file-alt"></i> Words: ${result.word_count}</span>
+                        <span><i class="fas fa-globe"></i> ${result.domain}</span>
+                    </div>
+                    ${result.highlights ? 
+                        `<div class="highlights">
+                            ${result.highlights.map(h => 
+                                `<p><i class="fas fa-quote-left"></i> ...${h}...</p>`
+                            ).join('')}
+                        </div>` : ''}
+                    <div class="timestamp">
+                        <i class="fas fa-clock"></i>
+                        Indexed: ${new Date(result.timestamp).toLocaleString()}
+                    </div>
+                    ${result.location ? 
+                        `<div class="location">
+                            <i class="fas fa-map-marker-alt"></i>
+                            Location: ${result.location.lat}, ${result.location.lon}
+                        </div>` : ''}
+                `;
+                resultsList.appendChild(resultItem);
+            });
+            
+            resultsDiv.appendChild(resultsList);
+        }
+
+        function displayFacets(facets) {
+            const facetsDiv = document.getElementById('facets');
+            facetsDiv.innerHTML = `
+                <h3>Statistics</h3>
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;">
+                    <div>
+                        <h4>Top Domains</h4>
+                        <ul>
+                            ${facets.domains.map(domain => 
+                                `<li>${domain.key}: ${domain.doc_count} pages</li>`
+                            ).join('')}
+                        </ul>
+                    </div>
+                    <div>
+                        <h4>Word Count Stats</h4>
+                        <p>Average: ${Math.round(facets.word_count_stats.avg)} words</p>
+                        <p>Min: ${facets.word_count_stats.min} words</p>
+                        <p>Max: ${facets.word_count_stats.max} words</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        function displayPagination(total, currentPage) {
+            const totalPages = Math.ceil(total / PAGE_SIZE);
+            const paginationDiv = document.getElementById('pagination');
+            paginationDiv.innerHTML = '';
+            
+            if (totalPages <= 1) return;
+
+            if (currentPage > 1) {
+                paginationDiv.innerHTML += `
+                    <button onclick="performSearch(${currentPage - 1})">Previous</button>
+                `;
+            }
+
+            paginationDiv.innerHTML += `<span>Page ${currentPage} of ${totalPages}</span>`;
+
+            if (currentPage < totalPages) {
+                paginationDiv.innerHTML += `
+                    <button onclick="performSearch(${currentPage + 1})">Next</button>
+                `;
+            }
+        }
+
+        document.getElementById('search_query').addEventListener('input', function(e) {
+            clearTimeout(suggestionTimeout);
+            const query = e.target.value;
+            
+            if (query.length < 2) {
+                document.getElementById('suggestions').innerHTML = '';
+                return;
+            }
+
+            suggestionTimeout = setTimeout(async () => {
+                const master_url = document.getElementById('master_url').value;
+                if (!master_url) return;
+
+                try {
+                    const res = await fetch(`/suggest?master_url=${encodeURIComponent(master_url)}&prefix=${encodeURIComponent(query)}`);
+                    const data = await res.json();
+                    
+                    if (res.ok && data.suggestions) {
+                        const suggestionsList = document.getElementById('suggestions');
+                        suggestionsList.innerHTML = data.suggestions
+                            .map(suggestion => `<li onclick="selectSuggestion('${suggestion}')">${suggestion}</li>`)
+                            .join('');
+                    }
+                } catch (err) {
+                    console.error('Error getting suggestions:', err);
+                }
+            }, 300);
+        });
+
+        function selectSuggestion(suggestion) {
+            document.getElementById('search_query').value = suggestion;
+            document.getElementById('suggestions').innerHTML = '';
+        }
+
+        async function updateClusterHealth() {
+            const master_url = document.getElementById('master_url').value;
+            if (!master_url) return;
+
+            try {
+                const token = await getAuthToken(master_url);
+                const res = await fetch(`${master_url}/cluster-health`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    displayClusterHealth(data);
+                    updateClusterCheckboxes(data);
+                } else {
+                    console.error('Failed to fetch cluster health:', data.error);
+                }
+            } catch (err) {
+                console.error('Error updating cluster health:', err);
+            }
+        }
+
+        function displayClusterHealth(data) {
+            const localStatus = document.getElementById('local-cluster-status');
+            localStatus.innerHTML = `
+                <div class="status-card ${getHealthClass(data.local_cluster.status)}">
+                    <h4><i class="fas fa-server"></i> Local Cluster</h4>
+                    <div class="status-details">
+                        <p><i class="fas fa-signal"></i> Status: ${data.local_cluster.status}</p>
+                        <p><i class="fas fa-network-wired"></i> Nodes: ${data.local_cluster.number_of_nodes}</p>
+                        <p><i class="fas fa-database"></i> Documents: ${data.local_cluster.active_shards}</p>
+                    </div>
+                </div>
+            `;
+
+            const remoteStatus = document.getElementById('remote-clusters-status');
+            remoteStatus.innerHTML = Object.entries(data.remote_clusters)
+                .map(([name, info]) => `
+                    <div class="status-card ${info.connected ? 'healthy' : 'error'}">
+                        <h4><i class="fas fa-cloud"></i> ${name}</h4>
+                        <div class="status-details">
+                            <p>
+                                <i class="fas ${info.connected ? 'fa-check-circle' : 'fa-times-circle'}"></i>
+                                Status: ${info.connected ? 'Connected' : 'Disconnected'}
+                            </p>
+                            ${info.connected ? `
+                                <p><i class="fas fa-network-wired"></i> Nodes: ${info.num_nodes}</p>
+                                <p><i class="fas fa-plug"></i> Max Connections: ${info.max_connections}</p>
+                            ` : `
+                                <p class="error-message">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    Error: ${info.error}
+                                </p>
+                            `}
+                        </div>
+                    </div>
+                `).join('');
+        }
+
+        function getHealthClass(status) {
+            switch (status.toLowerCase()) {
+                case 'green': return 'healthy';
+                case 'yellow': return 'warning';
+                default: return 'error';
+            }
+        }
+
+        function updateClusterCheckboxes(data) {
+            const container = document.getElementById('cluster-checkboxes');
+            container.innerHTML = `
+                <label>
+                    <input type="checkbox" name="clusters" value="local" checked>
+                    Local Cluster
+                </label>
+            `;
+            
+            Object.keys(data.remote_clusters).forEach(name => {
+                const connected = data.remote_clusters[name].connected;
+                container.innerHTML += `
+                    <label ${!connected ? 'class="disabled"' : ''}>
+                        <input type="checkbox" name="clusters" value="${name}" 
+                               ${connected ? 'checked' : 'disabled'}>
+                        ${name} ${!connected ? '(Disconnected)' : ''}
+                    </label>
+                `;
+            });
+        }
+
+        document.getElementById('crossClusterSearchForm').onsubmit = async function(e) {
+            e.preventDefault();
+            const master_url = document.getElementById('master_url').value;
+            const query = document.getElementById('cross_search_query').value;
+            const searchType = document.getElementById('cross_search_type').value;
+            
+            const selectedClusters = Array.from(document.querySelectorAll('input[name="clusters"]:checked'))
+                .map(cb => cb.value)
+                .filter(v => v !== 'local')
+                .join(',');
+
+            try {
+                const token = await getAuthToken(master_url);
+                const params = new URLSearchParams({
+                    query,
+                    type: searchType,
+                    clusters: selectedClusters
+                });
+
+                const res = await fetch(`${master_url}/cross-cluster-search?${params}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    displayCrossClusterResults(data);
+                } else {
+                    document.getElementById('cross_search_error').innerText = data.error;
+                    document.getElementById('cross_search_error').style.display = 'block';
+                }
+            } catch (err) {
+                document.getElementById('cross_search_error').innerText = 'Error performing cross-cluster search: ' + err;
+                document.getElementById('cross_search_error').style.display = 'block';
+            }
         };
+
+        function displayCrossClusterResults(data) {
+            const resultsDiv = document.getElementById('cross_search_results');
+            resultsDiv.innerHTML = '';
+
+            if (!data.results || data.results.length === 0) {
+                resultsDiv.innerHTML = '<p>No results found.</p>';
+                return;
+            }
+
+            resultsDiv.innerHTML = `
+                <div class="cluster-summary">
+                    <h4>Search Results from ${data.clusters.participating.length} clusters:</h4>
+                    <ul>
+                        ${data.clusters.participating.map(cluster => `
+                            <li>${cluster}: ${data.clusters.stats[cluster].doc_count} results 
+                                (avg score: ${data.clusters.stats[cluster].avg_score.toFixed(2)})</li>
+                        `).join('')}
+                    </ul>
+                </div>
+            `;
+
+            const resultsList = document.createElement('div');
+            data.results.forEach(result => {
+                const resultItem = document.createElement('div');
+                resultItem.className = 'search-result';
+                resultItem.style.margin = '20px 0';
+                resultItem.style.padding = '15px';
+                resultItem.style.borderBottom = '1px solid #eee';
+
+                resultItem.innerHTML = `
+                    <h3>
+                        <a href="${result.url}" target="_blank">${result.url}</a>
+                        <span class="cluster-badge">${result.cluster}</span>
+                    </h3>
+                    <p>Score: ${result.score.toFixed(2)} | Words: ${result.word_count}</p>
+                    ${result.highlights ? 
+                        `<div class="highlights">${result.highlights.map(h => 
+                            `<p>...${h}...</p>`).join('')}</div>` : ''}
+                    <small>Domain: ${result.domain} | Indexed: ${new Date(result.timestamp).toLocaleString()}</small>
+                `;
+                resultsList.appendChild(resultItem);
+            });
+            
+            resultsDiv.appendChild(resultsList);
+        }
+
+        setInterval(updateClusterHealth, 30000);
+        updateClusterHealth();
     </script>
 </body>
 </html>

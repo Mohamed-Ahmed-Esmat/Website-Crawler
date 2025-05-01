@@ -1,10 +1,37 @@
 import argparse
 import requests
 import logging
+import json
 from flask import Flask, request, jsonify, render_template
+from datetime import datetime, timedelta
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# JWT token management
+class TokenManager:
+    def __init__(self):
+        self.token = None
+        self.token_expiry = None
+    
+    def get_token(self, master_url):
+        if self.token and self.token_expiry and datetime.now() < self.token_expiry:
+            return self.token
+            
+        try:
+            response = requests.post(
+                f"{master_url}/auth",
+                json={"username": "admin", "password": "secret"}
+            )
+            if response.status_code == 200:
+                self.token = response.json()["token"]
+                self.token_expiry = datetime.now() + timedelta(hours=23)  # Refresh 1 hour before expiry
+                return self.token
+        except Exception as e:
+            logging.error(f"Error getting token: {e}")
+        return None
+
+token_manager = TokenManager()
 
 # Flask app for web interface
 app = Flask(__name__)
@@ -66,21 +93,81 @@ def get_results():
 
 @app.route('/search', methods=['GET'])
 def search_query():
-    """Endpoint to submit a search query."""
+    """Enhanced search endpoint with all Elasticsearch features"""
     master_url = request.args.get('master_url')
     query = request.args.get('query')
+    search_type = request.args.get('type', 'keyword')
+    from_date = request.args.get('from_date')
+    to_date = request.args.get('to_date')
+    domain = request.args.get('domain')
+    sort_by = request.args.get('sort', '_score')
+    page = request.args.get('page', '1')
+    page_size = request.args.get('page_size', '10')
 
     if not master_url or not query:
         return jsonify({"error": "Master URL and query are required."}), 400
 
+    # Get authentication token
+    token = token_manager.get_token(master_url)
+    if not token:
+        return jsonify({"error": "Failed to authenticate with master node"}), 401
+
     try:
-        response = requests.get(f"{master_url}/search", params={"query": query})
+        headers = {"Authorization": f"Bearer {token}"}
+        params = {
+            "query": query,
+            "type": search_type,
+            "from_date": from_date,
+            "to_date": to_date,
+            "domain": domain,
+            "sort": sort_by,
+            "page": page,
+            "page_size": page_size
+        }
+        
+        response = requests.get(
+            f"{master_url}/search",
+            headers=headers,
+            params={k: v for k, v in params.items() if v is not None}
+        )
+        
         if response.status_code == 200:
             return jsonify(response.json()), 200
         else:
-            return jsonify({"error": f"Failed to fetch search results. Status code: {response.status_code}", "response": response.text}), 500
+            return jsonify({"error": f"Search failed. Status code: {response.status_code}", "response": response.text}), response.status_code
+            
     except Exception as e:
-        return jsonify({"error": f"Error fetching search results: {e}"}), 500
+        return jsonify({"error": f"Error performing search: {e}"}), 500
+
+@app.route('/suggest', methods=['GET'])
+def get_suggestions():
+    """Autocomplete suggestions endpoint"""
+    master_url = request.args.get('master_url')
+    prefix = request.args.get('prefix')
+
+    if not master_url or not prefix:
+        return jsonify({"error": "Master URL and prefix are required."}), 400
+
+    # Get authentication token
+    token = token_manager.get_token(master_url)
+    if not token:
+        return jsonify({"error": "Failed to authenticate with master node"}), 401
+
+    try:
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.get(
+            f"{master_url}/suggest",
+            headers=headers,
+            params={"prefix": prefix}
+        )
+        
+        if response.status_code == 200:
+            return jsonify(response.json()), 200
+        else:
+            return jsonify({"error": f"Suggestion request failed. Status code: {response.status_code}"}), response.status_code
+            
+    except Exception as e:
+        return jsonify({"error": f"Error getting suggestions: {e}"}), 500
 
 @app.route('/monitor', methods=['GET'])
 def monitor_progress():

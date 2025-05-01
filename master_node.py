@@ -4,8 +4,16 @@ import logging
 import socket
 from flask import Flask, request, jsonify
 from threading import Thread
-# Import necessary libraries for task queue, database, etc. (e.g., redis, cloud storage SDKs) 
- 
+from elasticsearch import Elasticsearch
+from datetime import datetime, timedelta
+import os
+from functools import wraps
+import jwt
+from urllib.parse import urlparse
+from security import require_auth, cors_headers
+from elasticsearch_utils import es_manager
+from ssl_config import generate_self_signed_cert
+
 # Configure logging 
 hostname = socket.gethostname()
 try:
@@ -21,6 +29,28 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
+
+# Elasticsearch configuration
+ES_HOST = "http://localhost:9200"
+ES_INDEX = "webcrawler"
+es = Elasticsearch([ES_HOST])
+
+# JWT Configuration
+JWT_SECRET = os.environ.get('JWT_SECRET', 'your-secret-key')  # In production, use proper secret management
+
+def require_auth(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = request.headers.get('Authorization')
+        if not token:
+            return jsonify({"error": "No token provided"}), 401
+        try:
+            token = token.split(" ")[1]  # Remove 'Bearer ' prefix
+            jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        except:
+            return jsonify({"error": "Invalid token"}), 401
+        return f(*args, **kwargs)
+    return decorated
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -57,9 +87,278 @@ def get_results():
     """Endpoint to fetch crawl results."""
     return jsonify(crawl_results), 200
 
+@app.route("/search", methods=["GET"])
+@require_auth
+def search():
+    """Advanced search endpoint supporting various search types"""
+    query = request.args.get("query", "")
+    search_type = request.args.get("type", "keyword")
+    from_date = request.args.get("from_date")
+    to_date = request.args.get("to_date")
+    domain = request.args.get("domain")
+    sort_by = request.args.get("sort", "_score")
+    page = int(request.args.get("page", 1))
+    page_size = int(request.args.get("page_size", 10))
+    
+    # Base query
+    search_body = {
+        "from": (page - 1) * page_size,
+        "size": page_size,
+        "sort": [
+            {sort_by: {"order": "desc"}}
+        ],
+        "highlight": {
+            "fields": {
+                "content": {
+                    "number_of_fragments": 3,
+                    "fragment_size": 150
+                }
+            }
+        }
+    }
+    
+    # Build query based on search type
+    if search_type == "keyword":
+        search_body["query"] = {
+            "multi_match": {
+                "query": query,
+                "fields": ["content", "url"],
+                "fuzziness": "AUTO"
+            }
+        }
+    elif search_type == "phrase":
+        search_body["query"] = {
+            "match_phrase": {
+                "content": query
+            }
+        }
+    elif search_type == "wildcard":
+        search_body["query"] = {
+            "wildcard": {
+                "content": query
+            }
+        }
+    elif search_type == "regex":
+        search_body["query"] = {
+            "regexp": {
+                "content": query
+            }
+        }
+    
+    # Add filters if provided
+    filters = []
+    if from_date or to_date:
+        date_filter = {"range": {"timestamp": {}}}
+        if from_date:
+            date_filter["range"]["timestamp"]["gte"] = from_date
+        if to_date:
+            date_filter["range"]["timestamp"]["lte"] = to_date
+        filters.append(date_filter)
+    
+    if domain:
+        filters.append({"term": {"domain": domain}})
+    
+    if filters:
+        if "query" in search_body:
+            search_body["query"] = {
+                "bool": {
+                    "must": search_body["query"],
+                    "filter": filters
+                }
+            }
+        else:
+            search_body["query"] = {"bool": {"filter": filters}}
+    
+    # Add aggregations
+    search_body["aggs"] = {
+        "domains": {
+            "terms": {
+                "field": "domain",
+                "size": 10
+            }
+        },
+        "word_count_stats": {
+            "stats": {
+                "field": "word_count"
+            }
+        },
+        "timeline": {
+            "date_histogram": {
+                "field": "timestamp",
+                "calendar_interval": "day"
+            }
+        }
+    }
+    
+    try:
+        results = es.search(index=ES_INDEX, body=search_body)
+        
+        # Process and format results
+        hits = results["hits"]["hits"]
+        formatted_results = []
+        
+        for hit in hits:
+            source = hit["_source"]
+            formatted_hit = {
+                "url": source["url"],
+                "score": hit["_score"],
+                "word_count": source["word_count"],
+                "timestamp": source["timestamp"],
+                "domain": source["domain"]
+            }
+            
+            # Add highlights if available
+            if "highlight" in hit:
+                formatted_hit["highlights"] = hit["highlight"]["content"]
+            
+            formatted_results.append(formatted_hit)
+        
+        # Format aggregations
+        aggs = results["aggregations"]
+        
+        response = {
+            "total": results["hits"]["total"]["value"],
+            "page": page,
+            "page_size": page_size,
+            "results": formatted_results,
+            "facets": {
+                "domains": aggs["domains"]["buckets"],
+                "word_count_stats": aggs["word_count_stats"],
+                "timeline": aggs["timeline"]["buckets"]
+            }
+        }
+        
+        return jsonify(response)
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/suggest", methods=["GET"])
+@require_auth
+def suggest():
+    """Autocomplete suggestions endpoint"""
+    prefix = request.args.get("prefix", "")
+    
+    suggest_body = {
+        "suggestions": {
+            "prefix": prefix,
+            "completion": {
+                "field": "content.suggest",
+                "size": 5,
+                "skip_duplicates": True
+            }
+        }
+    }
+    
+    try:
+        suggestions = es.search(index=ES_INDEX, body=suggest_body)
+        options = suggestions["suggest"]["suggestions"][0]["options"]
+        
+        return jsonify({
+            "suggestions": [option["text"] for option in options]
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/auth", methods=["POST"])
+def authenticate():
+    """Generate JWT token for API access"""
+    username = request.json.get("username")
+    password = request.json.get("password")
+    
+    # In production, implement proper authentication
+    if username == "admin" and password == "secret":
+        token = jwt.encode(
+            {"user": username, "exp": datetime.utcnow() + timedelta(hours=24)},
+            JWT_SECRET,
+            algorithm="HS256"
+        )
+        return jsonify({"token": token})
+    
+    return jsonify({"error": "Invalid credentials"}), 401
+
+@app.route("/cross-cluster-search", methods=["GET"])
+@require_auth
+@cors_headers
+def cross_cluster_search():
+    """Advanced search endpoint that searches across all connected clusters"""
+    query = request.args.get("query", "")
+    search_type = request.args.get("type", "keyword")
+    include_clusters = request.args.get("clusters", "").split(",")
+    
+    try:
+        # Add cluster-specific parameters
+        kwargs = {
+            "search_type": search_type,
+            "size": int(request.args.get("size", "10")),
+            "from": int(request.args.get("from", "0")),
+            "cross_cluster": True  # Enable cross-cluster search
+        }
+        
+        if include_clusters:
+            kwargs["clusters"] = [c for c in include_clusters if c]
+            
+        # Call the cross-cluster search
+        results = es_manager.search_across_clusters(query, **kwargs)
+        return jsonify(results)
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/cluster-health", methods=["GET"])
+@require_auth
+@cors_headers
+def cluster_health():
+    """Get health status of all connected clusters"""
+    try:
+        # Get local cluster health
+        local_health = es_manager.es.cluster.health()
+        
+        # Get remote clusters health
+        remote_health = {}
+        for cluster in es_manager.es.cluster.get_remote_info():
+            try:
+                cluster_name = cluster['cluster_name']
+                connected = cluster['connected']
+                if connected:
+                    remote_health[cluster_name] = {
+                        "connected": True,
+                        "num_nodes": cluster['num_nodes_connected'],
+                        "max_connections": cluster['max_connections_per_cluster'],
+                        "initial_connect_timeout": cluster['initial_connect_timeout']
+                    }
+                else:
+                    remote_health[cluster_name] = {
+                        "connected": False,
+                        "error": "Cluster not connected"
+                    }
+            except Exception as cluster_e:
+                remote_health[cluster['cluster_name']] = {
+                    "connected": False,
+                    "error": str(cluster_e)
+                }
+                
+        return jsonify({
+            "local_cluster": local_health,
+            "remote_clusters": remote_health
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 def run_flask_app():
-    """Run the Flask app in a separate thread."""
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    """Run the Flask app in a separate thread with HTTPS support."""
+    # Generate SSL certificate
+    key_path, cert_path = generate_self_signed_cert()
+    
+    # Run Flask with HTTPS
+    app.run(
+        host="0.0.0.0", 
+        port=5000, 
+        debug=False,
+        ssl_context=(cert_path, key_path)
+    )
 
 def master_process(): 
     """ 
