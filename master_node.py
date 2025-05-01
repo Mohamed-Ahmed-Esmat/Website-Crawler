@@ -74,20 +74,33 @@ def master_process():
                 elif message_tag == 999: # Crawler node reports error 
                     logging.error(f"Crawler {message_source} reported error: {message_data}") 
                     crawler_tasks_assigned -= 1 # Decrement task count even on error, consider re-assigning task in real implementation 
- 
+                elif message_tag == 98:  # Heartbeat
+                    logging.info(f"Heartbeat received from Crawler {message_source}: {message_data}")
+                elif message_tag == 2:  # Page content from crawler
+                    logging.info(f"Page content received from Crawler {message_source}. Forwarding to indexer...")
+                    indexer_rank = active_indexer_nodes[0]  # Assuming one indexer node for now
+                    comm.send(message_data, dest=indexer_rank, tag=2)  # Forward to indexer
+
         # Assign new crawling tasks if there are URLs in the queue and available crawler nodes 
         while urls_to_crawl_queue and crawler_tasks_assigned < crawler_nodes: # Limit tasks to available crawler nodes for simplicity in this skeleton 
             url_to_crawl = urls_to_crawl_queue.pop(0) # Get URL from queue (FIFO for simplicity) 
             available_crawler_rank = active_crawler_nodes[crawler_tasks_assigned % len(active_crawler_nodes)] # Simple round-robin assignment 
             task_id = task_count 
             task_count += 1 
-            comm.send(url_to_crawl, dest=available_crawler_rank, tag=0) # Tag 0 for task assignment 
+            task_metadata = {"urls": [url_to_crawl], "max_depth": 3}  # Example metadata
+            comm.send(task_metadata, dest=available_crawler_rank, tag=0) # Send task with metadata
             crawler_tasks_assigned += 1 
             logging.info(f"Master assigned task {task_id} (crawl {url_to_crawl}) to Crawler {available_crawler_rank}, Tasks assigned: {crawler_tasks_assigned}") 
             time.sleep(0.1) # Small delay to prevent overwhelming master in this example 
         time.sleep(1) # Master node's main loop sleep - adjust as needed 
     logging.info("Master node finished URL distribution. Waiting for crawlers to complete...") 
+
+    # Send shutdown signal to crawler nodes
+    for crawler_rank in active_crawler_nodes:
+        comm.send(None, dest=crawler_rank, tag=0)  # Empty task signals shutdown
+        logging.info(f"Shutdown signal sent to Crawler {crawler_rank}")
+
 # In a real system, you would have more sophisticated shutdown and result aggregation logic 
 print("Master Node Finished.") 
 if __name__ == '__main__': 
-    master_process() 
+    master_process()
