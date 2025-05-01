@@ -2,6 +2,8 @@ from mpi4py import MPI
 import time 
 import logging 
 import socket
+from flask import Flask, request, jsonify
+from threading import Thread
 # Import necessary libraries for task queue, database, etc. (e.g., redis, cloud storage SDKs) 
  
 # Configure logging 
@@ -19,6 +21,50 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
+
+# Initialize Flask app
+app = Flask(__name__)
+
+# Shared data structures
+urls_to_crawl_queue = []  # Queue for URLs to crawl
+crawler_status = {"tasks_assigned": 0, "urls_in_queue": 0}  # Status tracking
+crawl_results = []  # Store crawl results (for simplicity)
+
+@app.route("/submit", methods=["POST"])
+def submit_task():
+    """Endpoint to submit a crawling task."""
+    data = request.get_json()
+    urls = data.get("urls", [])
+    max_depth = data.get("max_depth", 3)
+
+    if not urls or not isinstance(urls, list):
+        return jsonify({"error": "Invalid 'urls' field. Must be a list of URLs."}), 400
+
+    # Add URLs to the queue
+    for url in urls:
+        urls_to_crawl_queue.append({"url": url, "max_depth": max_depth})
+
+    crawler_status["urls_in_queue"] = len(urls_to_crawl_queue)
+    return jsonify({"message": "Task submitted successfully.", "queue_size": len(urls_to_crawl_queue)}), 200
+
+@app.route("/status", methods=["GET"])
+def get_status():
+    """Endpoint to get the status of the crawler."""
+    return jsonify(crawler_status), 200
+
+@app.route("/results", methods=["GET"])
+def get_results():
+    """Endpoint to fetch crawl results."""
+    return jsonify(crawl_results), 200
+
+def run_flask_app():
+    """Run the Flask app in a separate thread."""
+    app.run(host="0.0.0.0", port=5000, debug=False)
+
+# Start Flask server in a separate thread
+flask_thread = Thread(target=run_flask_app)
+flask_thread.daemon = True
+flask_thread.start()
 
 def master_process(): 
     """ 
@@ -49,7 +95,7 @@ def master_process():
     logging.info(f"Active Indexer Nodes: {active_indexer_nodes}") 
 
     seed_urls = ["http://example.com", "http://example.org"] # Example seed URLs - replace with actual seed URLs 
-    urls_to_crawl_queue = seed_urls  # Simple list as initial queue - replace with a distributed queue 
+    urls_to_crawl_queue.extend(seed_urls)  # Simple list as initial queue - replace with a distributed queue 
  
     task_count = 0 
     crawler_tasks_assigned = 0 
@@ -80,6 +126,7 @@ def master_process():
                     logging.info(f"Page content received from Crawler {message_source}. Forwarding to indexer...")
                     indexer_rank = active_indexer_nodes[0]  # Assuming one indexer node for now
                     comm.send(message_data, dest=indexer_rank, tag=2)  # Forward to indexer
+                    crawl_results.append(message_data)  # Store the result
 
         # Assign new crawling tasks if there are URLs in the queue and available crawler nodes 
         while urls_to_crawl_queue and crawler_tasks_assigned < crawler_nodes: # Limit tasks to available crawler nodes for simplicity in this skeleton 
@@ -93,6 +140,11 @@ def master_process():
             logging.info(f"Master assigned task {task_id} (crawl {url_to_crawl}) to Crawler {available_crawler_rank}, Tasks assigned: {crawler_tasks_assigned}") 
             time.sleep(0.1) # Small delay to prevent overwhelming master in this example 
         time.sleep(1) # Master node's main loop sleep - adjust as needed 
+
+        # Update crawler status
+        crawler_status["tasks_assigned"] = crawler_tasks_assigned
+        crawler_status["urls_in_queue"] = len(urls_to_crawl_queue)
+
     logging.info("Master node finished URL distribution. Waiting for crawlers to complete...") 
 
     # Send shutdown signal to crawler nodes

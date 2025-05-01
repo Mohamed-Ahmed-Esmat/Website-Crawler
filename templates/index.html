@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Distributed Web Crawler Client</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f7f7f7; }
+        .container { background: #fff; padding: 30px; border-radius: 8px; max-width: 500px; margin: auto; box-shadow: 0 2px 8px #ccc; }
+        h2 { text-align: center; }
+        label { display: block; margin-top: 15px; }
+        input[type=text], input[type=number] { width: 100%; padding: 8px; margin-top: 5px; border-radius: 4px; border: 1px solid #ccc; }
+        button { margin-top: 20px; width: 100%; padding: 10px; background: #007bff; color: #fff; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .result, .error { margin-top: 20px; padding: 10px; border-radius: 4px; }
+        .result { background: #e6ffe6; color: #1a7f1a; }
+        .error { background: #ffe6e6; color: #b30000; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Distributed Web Crawler Client</h2>
+        <form id="crawlForm">
+            <label for="master_url">Master Node URL:</label>
+            <input type="text" id="master_url" name="master_url" placeholder="http://<master-ip>:5000" required>
+
+            <label for="query">Seed URL:</label>
+            <input type="text" id="query" name="query" placeholder="https://example.com" required>
+
+            <label for="max_depth">Max Depth:</label>
+            <input type="number" id="max_depth" name="max_depth" value="3" min="1" max="10">
+
+            <button type="submit">Submit Crawl Task</button>
+        </form>
+        <div id="response" class="result" style="display:none;"></div>
+        <div id="error" class="error" style="display:none;"></div>
+
+        <form id="searchForm" style="margin-top: 30px;">
+            <label for="search_query">Search Query:</label>
+            <input type="text" id="search_query" name="search_query" placeholder="Enter search query" required>
+
+            <button type="submit">Submit Search Query</button>
+        </form>
+        <div id="search_response" class="result" style="display:none;"></div>
+        <div id="search_error" class="error" style="display:none;"></div>
+    </div>
+    <script>
+        document.getElementById('crawlForm').onsubmit = async function(e) {
+            e.preventDefault();
+            document.getElementById('response').style.display = 'none';
+            document.getElementById('error').style.display = 'none';
+            const master_url = document.getElementById('master_url').value;
+            const query = document.getElementById('query').value;
+            const max_depth = document.getElementById('max_depth').value;
+            const formData = new FormData();
+            formData.append('master_url', master_url);
+            formData.append('query', query);
+            formData.append('max_depth', max_depth);
+            try {
+                const res = await fetch('/submit', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    document.getElementById('response').innerText = data.message || JSON.stringify(data);
+                    document.getElementById('response').style.display = 'block';
+                } else {
+                    document.getElementById('error').innerText = data.error || 'Unknown error';
+                    document.getElementById('error').style.display = 'block';
+                }
+            } catch (err) {
+                document.getElementById('error').innerText = 'Request failed: ' + err;
+                document.getElementById('error').style.display = 'block';
+            }
+        };
+
+        document.getElementById('searchForm').onsubmit = async function(e) {
+            e.preventDefault();
+            document.getElementById('search_response').style.display = 'none';
+            document.getElementById('search_error').style.display = 'none';
+            const master_url = document.getElementById('master_url').value;
+            const search_query = document.getElementById('search_query').value;
+            try {
+                const res = await fetch(`/search?master_url=${encodeURIComponent(master_url)}&query=${encodeURIComponent(search_query)}`);
+                const data = await res.json();
+                if (res.ok) {
+                    document.getElementById('search_response').innerText = JSON.stringify(data);
+                    document.getElementById('search_response').style.display = 'block';
+                } else {
+                    document.getElementById('search_error').innerText = data.error || 'Unknown error';
+                    document.getElementById('search_error').style.display = 'block';
+                }
+            } catch (err) {
+                document.getElementById('search_error').innerText = 'Request failed: ' + err;
+                document.getElementById('search_error').style.display = 'block';
+            }
+        };
+    </script>
+</body>
+</html>
