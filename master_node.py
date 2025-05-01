@@ -61,11 +61,6 @@ def run_flask_app():
     """Run the Flask app in a separate thread."""
     app.run(host="0.0.0.0", port=5000, debug=False)
 
-# Start Flask server in a separate thread
-flask_thread = Thread(target=run_flask_app)
-flask_thread.daemon = True
-flask_thread.start()
-
 def master_process(): 
     """ 
     Main process for the master node. 
@@ -111,7 +106,7 @@ def master_process():
  
                 if message_tag == 1: # Crawler completed task and sent back extracted URLs 
                     crawler_tasks_assigned -= 1 
-                    new_urls = message_data # Assuming message_data is a list of URLs 
+                    new_urls = message_data['urls'] # Assuming message_data is a list of URLs 
                     if new_urls: 
                         urls_to_crawl_queue.extend(new_urls) # Add newly discovered URLs to the queue 
                     logging.info(f"Master received URLs from Crawler {message_source}, URLs in queue: {len(urls_to_crawl_queue)}, Tasks assigned: {crawler_tasks_assigned}") 
@@ -154,5 +149,14 @@ def master_process():
 
 # In a real system, you would have more sophisticated shutdown and result aggregation logic 
 print("Master Node Finished.") 
-if __name__ == '__main__': 
+if __name__ == '__main__':
+    # Start the Flask server in a separate thread
+    flask_thread = Thread(target=run_flask_app)
+    flask_thread.daemon = True
+    flask_thread.start()
+
+    # Wait for user input before starting the master process
+    input("Press Enter to start the master process...")
+
+    # Start the master process
     master_process()

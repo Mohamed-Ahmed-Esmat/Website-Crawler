@@ -213,6 +213,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pip"
+version = "25.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/79/67/c06f625e2968c417052b3a4a0eef40656d5d4d44033e57b40ec474af1d28/pip-25.1.tar.gz", hash = "sha256:272bdd1289f80165e9070a4f881e8f9e1001bbb50378561d1af20e49bf5a2200", size = 1939624, upload_time = "2025-04-26T09:45:36.149Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e0/f0/8a2806114cd36e282823fd4d8e88e3b94dc943c2569c350d0c826a49db38/pip-25.1-py3-none-any.whl", hash = "sha256:13b4aa0aaad055020a11bec8a1c2a70a2b2d080e12d89b962266029fff0a16ba", size = 1824948, upload_time = "2025-04-26T09:45:33.871Z" },
+]
+
+[[package]]
 name = "python-dateutil"
 version = "2.9.0.post0"
 source = { registry = "https://pypi.org/simple" }
@@ -283,6 +292,7 @@ dependencies = [
     { name = "bs4" },
     { name = "elasticsearch" },
     { name = "flask" },
+    { name = "pip" },
     { name = "requests" },
     { name = "whoosh" },
 ]
@@ -292,6 +302,7 @@ requires-dist = [
     { name = "bs4", specifier = ">=0.0.2" },
     { name = "elasticsearch", specifier = ">=9.0.0" },
     { name = "flask", specifier = ">=3.1.0" },
+    { name = "pip", specifier = ">=25.1" },
     { name = "requests", specifier = ">=2.32.3" },
     { name = "whoosh", specifier = ">=2.7.4" },
 ]

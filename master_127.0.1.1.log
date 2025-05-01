@@ -1,0 +1,12 @@
+2025-05-01 15:24:02,187 - 127.0.1.1 - Master - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://172.30.23.178:5000
+2025-05-01 15:24:02,188 - 127.0.1.1 - Master - INFO - [33mPress CTRL+C to quit[0m
+2025-05-01 15:24:30,316 - 127.0.1.1 - Master - INFO - 127.0.0.1 - - [01/May/2025 15:24:30] "[33mGET / HTTP/1.1[0m" 404 -
+2025-05-01 15:24:30,715 - 127.0.1.1 - Master - INFO - 127.0.0.1 - - [01/May/2025 15:24:30] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2025-05-01 15:25:54,864 - 127.0.1.1 - Master - INFO - 127.0.0.1 - - [01/May/2025 15:25:54] "[31m[1mPOST /submit HTTP/1.1[0m" 415 -
+2025-05-01 15:29:46,497 - 127.0.1.1 - Master - INFO - 127.0.0.1 - - [01/May/2025 15:29:46] "[31m[1mPOST /submit HTTP/1.1[0m" 415 -
+2025-05-01 15:30:16,422 - 127.0.1.1 - Master - INFO - 127.0.0.1 - - [01/May/2025 15:30:16] "POST /submit HTTP/1.1" 200 -
+2025-05-01 15:31:25,742 - 127.0.1.1 - Master - INFO - 127.0.0.1 - - [01/May/2025 15:31:25] "GET /status HTTP/1.1" 200 -
+2025-05-01 15:31:40,751 - 127.0.1.1 - Master - INFO - 127.0.0.1 - - [01/May/2025 15:31:40] "GET /results HTTP/1.1" 200 -
