@@ -44,15 +44,16 @@ def generate_self_signed_cert(cert_dir="certs"):
     logging.info(f"Generated self-signed certificate in {cert_dir}")
     return key_path, cert_path
 
-def setup_cross_cluster_ssl(cert_dir="certs"):
-    """Configure cross-cluster SSL settings"""
-    key_path, cert_path = generate_self_signed_cert(cert_dir)
+def setup_cross_cluster_ssl():
+    """Configure SSL settings for Elasticsearch"""
+    key_path, cert_path = generate_self_signed_cert()
     
     ssl_config = {
-        "xpack.security.transport.ssl.enabled": True,
-        "xpack.security.transport.ssl.verification_mode": "certificate",
-        "xpack.security.transport.ssl.keystore.path": key_path,
-        "xpack.security.transport.ssl.truststore.path": cert_path,
+        "ssl": True,
+        "verify_certs": True,
+        "ca_certs": cert_path,
+        "client_cert": cert_path,
+        "client_key": key_path
     }
     
     return ssl_config
