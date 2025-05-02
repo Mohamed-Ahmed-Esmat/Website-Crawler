@@ -444,6 +444,50 @@
                             <input type="text" id="domain" name="domain" 
                                    placeholder="e.g., example.com">
                         </div>
+
+                        <div class="form-group">
+                            <label for="min_words">
+                                <i class="fas fa-file-alt"></i> Minimum Word Count
+                                <span class="tooltip" data-tooltip="Minimum number of words a page must have">
+                                    <i class="fas fa-info-circle"></i>
+                                </span>
+                            </label>
+                            <input type="number" id="min_words" name="min_words" 
+                                   placeholder="e.g., 100" min="0">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="max_words">
+                                <i class="fas fa-file-alt"></i> Maximum Word Count
+                                <span class="tooltip" data-tooltip="Maximum number of words a page can have">
+                                    <i class="fas fa-info-circle"></i>
+                                </span>
+                            </label>
+                            <input type="number" id="max_words" name="max_words" 
+                                   placeholder="e.g., 1000" min="0">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="location">
+                                <i class="fas fa-map-marker-alt"></i> Location Search
+                                <span class="tooltip" data-tooltip="Format: latitude,longitude (e.g., 40.7128,-74.0060 for New York)">
+                                    <i class="fas fa-info-circle"></i>
+                                </span>
+                            </label>
+                            <input type="text" id="location" name="location" 
+                                   placeholder="e.g., 40.7128,-74.0060">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="distance">
+                                <i class="fas fa-circle-notch"></i> Search Radius
+                                <span class="tooltip" data-tooltip="Distance from location point (append km or mi)">
+                                    <i class="fas fa-info-circle"></i>
+                                </span>
+                            </label>
+                            <input type="text" id="distance" name="distance" 
+                                   placeholder="e.g., 10km or 5mi">
+                        </div>
                     </div>
 
                     <button type="submit" class="btn btn-primary">
@@ -651,6 +695,10 @@
             const fromDate = document.getElementById('from_date').value;
             const toDate = document.getElementById('to_date').value;
             const domain = document.getElementById('domain').value;
+            const minWords = document.getElementById('min_words').value;
+            const maxWords = document.getElementById('max_words').value;
+            const location = document.getElementById('location').value;
+            const distance = document.getElementById('distance').value;
 
             try {
                 const params = new URLSearchParams({
@@ -664,6 +712,10 @@
                 if (fromDate) params.append('from_date', fromDate);
                 if (toDate) params.append('to_date', toDate);
                 if (domain) params.append('domain', domain);
+                if (minWords) params.append('min_words', minWords);
+                if (maxWords) params.append('max_words', maxWords);
+                if (location) params.append('location', location);
+                if (distance) params.append('distance', distance);
 
                 const res = await fetch(`/search?${params}`);
                 const data = await res.json();

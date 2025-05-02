@@ -100,6 +100,10 @@ def search_query():
     from_date = request.args.get('from_date')
     to_date = request.args.get('to_date')
     domain = request.args.get('domain')
+    min_words = request.args.get('min_words')
+    max_words = request.args.get('max_words')
+    location = request.args.get('location')
+    distance = request.args.get('distance')
     sort_by = request.args.get('sort', '_score')
     page = request.args.get('page', '1')
     page_size = request.args.get('page_size', '10')
@@ -120,6 +124,10 @@ def search_query():
             "from_date": from_date,
             "to_date": to_date,
             "domain": domain,
+            "min_words": min_words,
+            "max_words": max_words,
+            "location": location,
+            "distance": distance,
             "sort": sort_by,
             "page": page,
             "page_size": page_size
