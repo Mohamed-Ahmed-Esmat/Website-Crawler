@@ -5,10 +5,16 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "aiohttp>=3.8.0",
+    "asyncio>=3.4.3",
     "bs4>=0.0.2",
-    "elasticsearch>=9.0.0",
-    "flask>=3.1.0",
+    "elasticsearch>=8.0.0",
+    "flask>=3.0.0",
+    "geopy>=2.3.0",
     "pip>=25.1",
+    "pyopenssl>=23.0.0",
+    "python-dotenv>=1.0.0",
+    "python-jwt>=4.0.0",
     "requests>=2.32.3",
     "whoosh>=2.7.4",
 ]

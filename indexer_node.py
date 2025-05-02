@@ -34,33 +34,6 @@ logging.basicConfig(
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 
-# Get SSL configuration
-ssl_config = setup_cross_cluster_ssl()
-
-# Initialize Elasticsearch client with SSL
-es = Elasticsearch(
-    [ES_CONFIG['hosts'][0]],
-    **ssl_config,
-    basic_auth=ES_CONFIG.get('basic_auth'),
-    verify_certs=ES_CONFIG.get('verify_certs', True),
-    ca_certs=ES_CONFIG.get('ca_certs'),
-    client_cert=ES_CONFIG.get('client_cert'),
-    client_key=ES_CONFIG.get('client_key')
-)
-
-def setup_elasticsearch():
-    """Create and configure the Elasticsearch index"""
-    index_name = INDEX_SETTINGS['name']
-    if not es.indices.exists(index=index_name):
-        es.indices.create(index=index_name, body={
-            "settings": INDEX_SETTINGS['settings'],
-            "mappings": INDEX_SETTINGS['mappings']
-        })
-        logging.info(f"Created Elasticsearch index: {index_name}")
-
-# Call setup on startup
-setup_elasticsearch()
-
 # --- Checkpointing System Functions ---
 def save_checkpoint(current_state, progress_point, data):
     with open('indexer_checkpoint.pkl', 'wb') as f:
