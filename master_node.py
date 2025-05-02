@@ -365,6 +365,13 @@ def master_process():
     Main process for the master node. 
     Handles task distribution, worker management, and coordination. 
     """ 
+    # Start the Flask server in a separate thread
+    logging.info("Starting Flask web server on a separate thread...")
+    flask_thread = Thread(target=run_flask_app)
+    flask_thread.daemon = True
+    flask_thread.start()
+    logging.info("Flask web server thread started")
+    
     comm = MPI.COMM_WORLD 
     rank = comm.Get_rank() 
     size = comm.Get_size() 
@@ -449,13 +456,5 @@ def master_process():
 # In a real system, you would have more sophisticated shutdown and result aggregation logic 
 print("Master Node Finished.") 
 if __name__ == '__main__':
-    # Start the Flask server in a separate thread
-    flask_thread = Thread(target=run_flask_app)
-    flask_thread.daemon = True
-    flask_thread.start()
-
-    # Wait for user input before starting the master process
-    input("Press Enter to start the master process...")
-
     # Start the master process
     master_process()
