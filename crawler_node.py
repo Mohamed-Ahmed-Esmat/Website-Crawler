@@ -173,7 +173,7 @@ def process_url_batch(urls_batch, max_depth, comm, rank, current_depth=1):
                 'depth': current_depth,
                 'timestamp': datetime.now().isoformat()
             }
-            comm.send(page_data, dest=indexer_rank, tag=TAG_PAGE_CONTENT)
+            comm.send(page_data, dest=0, tag=TAG_PAGE_CONTENT)
             logging.info(f"Sent extracted content to indexer node {indexer_rank}")
             
             # Add extracted URLs to the collection if we haven't reached max depth
