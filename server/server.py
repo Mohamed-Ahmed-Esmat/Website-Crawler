@@ -89,6 +89,8 @@ def get_system_status():
     """API endpoint to get the status of all crawler nodes and indexers"""
     try:
 
+        comm.send(None, dest=0, tag=TAG_START_CRAWLING)
+
         nodes = comm.recv(source=0, tag=TAG_START_CRAWLING)
 
         return jsonify({
