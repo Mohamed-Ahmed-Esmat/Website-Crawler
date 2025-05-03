@@ -1,17 +1,21 @@
+from unittest import result
+from matplotlib import texmanager
 from mpi4py import MPI 
 import time 
 import logging 
 import socket
 from flask import Flask, request, jsonify
 from threading import Thread
-from elasticsearch import Elasticsearch
+# from elasticsearch import Elasticsearch
 from datetime import datetime, timedelta
 import os
 from functools import wraps
 import jwt
 from urllib.parse import urlparse
+
+from requests import options
 from security import require_auth, cors_headers
-from elasticsearch_utils import es_manager
+# from elasticsearch_utils import es_manager
 from ssl_config import generate_self_signed_cert
 
 # Configure logging 
@@ -30,10 +34,10 @@ logging.basicConfig(
     ]
 )
 
-# Elasticsearch configuration
-ES_HOST = "http://localhost:9200"
-ES_INDEX = "webcrawler"
-es = Elasticsearch([ES_HOST])
+# # Elasticsearch configuration
+# ES_HOST = "http://localhost:9200"
+# ES_INDEX = "webcrawler"
+# es = Elasticsearch([ES_HOST])
 
 # JWT Configuration
 JWT_SECRET = os.environ.get('JWT_SECRET', 'your-secret-key')  # In production, use proper secret management
@@ -191,10 +195,10 @@ def search():
     }
     
     try:
-        results = es.search(index=ES_INDEX, body=search_body)
+        # results = es.search(index=ES_INDEX, body=search_body)
         
         # Process and format results
-        hits = results["hits"]["hits"]
+        hits = result["hits"]["hits"]
         formatted_results = []
         
         for hit in hits:
@@ -214,10 +218,10 @@ def search():
             formatted_results.append(formatted_hit)
         
         # Format aggregations
-        aggs = results["aggregations"]
+        aggs = result["aggregations"]
         
         response = {
-            "total": results["hits"]["total"]["value"],
+            "total": result["hits"]["total"]["value"],
             "page": page,
             "page_size": page_size,
             "results": formatted_results,
@@ -251,8 +255,8 @@ def suggest():
     }
     
     try:
-        suggestions = es.search(index=ES_INDEX, body=suggest_body)
-        options = suggestions["suggest"]["suggestions"][0]["options"]
+        # suggestions = es.search(index=ES_INDEX, body=suggest_body)
+        # options = suggestions["suggest"]["suggestions"][0]["options"]
         
         return jsonify({
             "suggestions": [option["text"] for option in options]
@@ -300,7 +304,7 @@ def cross_cluster_search():
             kwargs["clusters"] = [c for c in include_clusters if c]
             
         # Call the cross-cluster search
-        results = es_manager.search_across_clusters(query, **kwargs)
+        results = texmanager.search_across_clusters(query, **kwargs)
         return jsonify(results)
         
     except Exception as e:
@@ -313,11 +317,11 @@ def cluster_health():
     """Get health status of all connected clusters"""
     try:
         # Get local cluster health
-        local_health = es_manager.es.cluster.health()
+        local_health = texmanager.es.cluster.health()
         
         # Get remote clusters health
         remote_health = {}
-        for cluster in es_manager.es.cluster.get_remote_info():
+        for cluster in texmanager.es.cluster.get_remote_info():
             try:
                 cluster_name = cluster['cluster_name']
                 connected = cluster['connected']

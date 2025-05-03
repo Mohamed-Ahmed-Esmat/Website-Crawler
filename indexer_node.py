@@ -5,13 +5,13 @@ import os
 import pickle
 import re
 import socket
-from elasticsearch import Elasticsearch
+#from elasticsearch import Elasticsearch
 from datetime import datetime
 import json
 from urllib.parse import urlparse
-from elasticsearch_utils import es_manager
+#from elasticsearch_utils import es_manager
 from utils import location_extractor
-from config import ES_CONFIG, INDEX_SETTINGS
+#from config import ES_CONFIG, INDEX_SETTINGS
 from security import security_manager, require_auth, cors_headers
 from ssl_config import setup_cross_cluster_ssl
 
@@ -174,35 +174,35 @@ def indexing_state(data, progress_point=None):
         if not location:
             location = location_extractor.extract_from_url(url)
 
-        # Prepare document for Elasticsearch
-        doc = {
-            "url": url,
-            "content": content,
-            "timestamp": datetime.now().isoformat(),
-            "crawler_rank": rank,
-            "domain": urlparse(url).netloc,
-            "word_count": len(words),
-            "indexed_by": f"indexer_{rank}",
-            "suggest": {
-                "input": words[:100]  # Use first 100 words for suggestions
-            }
-        }
+        # # Prepare document for Elasticsearch
+        # doc = {
+        #     "url": url,
+        #     "content": content,
+        #     "timestamp": datetime.now().isoformat(),
+        #     "crawler_rank": rank,
+        #     "domain": urlparse(url).netloc,
+        #     "word_count": len(words),
+        #     "indexed_by": f"indexer_{rank}",
+        #     "suggest": {
+        #         "input": words[:100]  # Use first 100 words for suggestions
+        #     }
+        # }
 
         # Add location if found
-        if location:
-            doc["location"] = location
-            logging.info(f"Added location data for URL: {url}")
+        # if location:
+        #     doc["location"] = location
+        #     logging.info(f"Added location data for URL: {url}")
 
-        # Use asyncio to run the async index_document method
-        import asyncio
-        success = asyncio.run(es_manager.index_document(doc))
+        # # Use asyncio to run the async index_document method
+        # import asyncio
+        # success = asyncio.run(es_manager.index_document(doc))
         
-        if success:
-            logging.info(f"Successfully indexed document for URL: {url}")
-            return "Ready_For_Querying", None
-        else:
-            logging.error(f"Failed to index document for URL: {url}")
-            return "Recovery", {"original_state": "Indexing", "data": data}
+        # if success:
+        #     logging.info(f"Successfully indexed document for URL: {url}")
+        #     return "Ready_For_Querying", None
+        # else:
+        #     logging.error(f"Failed to index document for URL: {url}")
+        #     return "Recovery", {"original_state": "Indexing", "data": data}
 
     except Exception as e:
         logging.error(f"Error during indexing: {e}")
@@ -333,7 +333,7 @@ Tips:
 
 @rate_limit_decorator
 def ready_for_querying_state(comm):
-    logging.info("State: READY_FOR_QUERYING - Accepting Elasticsearch queries...")
+    #logging.info("State: READY_FOR_QUERYING - Accepting Elasticsearch queries...")
     
     print("\n[Indexer] Ready for Queries! Type 'help' for detailed information about commands.")
 
@@ -392,7 +392,7 @@ def ready_for_querying_state(comm):
                         print("Invalid location format. Should be latitude,longitude")
                         continue
                 
-                results = es_manager.search(query, search_type="keyword", **kwargs)
+                # results = es_manager.search(query, search_type="keyword", **kwargs)
                 query_cache.put(cache_key, results)
             
         elif query_input.startswith(("keyword ", "phrase ", "fuzzy ", "wildcard ", "suggest ")):
@@ -409,34 +409,34 @@ def ready_for_querying_state(comm):
                         continue
                     results = cached_result
                     print("(Cached result)")
-                else:
-                    if query_input.startswith("keyword "):
-                        term = query_input[8:].strip()
-                        results = es_manager.search(term, search_type="keyword")
+                # else:
+                #     if query_input.startswith("keyword "):
+                #         term = query_input[8:].strip()
+                #         results = es_manager.search(term, search_type="keyword")
                         
-                    elif query_input.startswith("phrase "):
-                        phrase = query_input[7:].strip('"')
-                        results = es_manager.search(phrase, search_type="phrase")
+                #     elif query_input.startswith("phrase "):
+                #         phrase = query_input[7:].strip('"')
+                #         results = es_manager.search(phrase, search_type="phrase")
                         
-                    elif query_input.startswith("fuzzy "):
-                        term = query_input[6:].strip()
-                        results = es_manager.search(term, search_type="keyword", fuzziness="AUTO")
+                #     elif query_input.startswith("fuzzy "):
+                #         term = query_input[6:].strip()
+                #         results = es_manager.search(term, search_type="keyword", fuzziness="AUTO")
                         
-                    elif query_input.startswith("wildcard "):
-                        pattern = query_input[9:].strip()
-                        results = es_manager.search(pattern, search_type="regex")
+                #     elif query_input.startswith("wildcard "):
+                #         pattern = query_input[9:].strip()
+                #         results = es_manager.search(pattern, search_type="regex")
                         
-                    elif query_input.startswith("suggest "):
-                        prefix = query_input[8:].strip()
-                        suggestions = es_manager.suggest(prefix)
-                        query_cache.put(cache_key, suggestions)
-                        if suggestions:
-                            print("\nSuggestions:")
-                            for suggestion in suggestions:
-                                print(f"- {suggestion}")
-                        else:
-                            print("No suggestions found")
-                        continue
+                #     elif query_input.startswith("suggest "):
+                #         prefix = query_input[8:].strip()
+                #         suggestions = es_manager.suggest(prefix)
+                #         query_cache.put(cache_key, suggestions)
+                #         if suggestions:
+                #             print("\nSuggestions:")
+                #             for suggestion in suggestions:
+                #                 print(f"- {suggestion}")
+                #         else:
+                #             print("No suggestions found")
+                #         continue
                         
                     query_cache.put(cache_key, results)
                     
@@ -452,9 +452,9 @@ def ready_for_querying_state(comm):
                 if cached_stats:
                     response = cached_stats
                     print("(Cached statistics)")
-                else:
-                    response = es_manager.get_stats()
-                    query_cache.put(cache_key, response)
+                # else:
+                #     response = es_manager.get_stats()
+                #     query_cache.put(cache_key, response)
                 
                 print("\nIndex Statistics:")
                 print(f"Total Documents: {response['total_docs']}")
