@@ -1,9 +1,18 @@
+from mpi4py import MPI
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 import requests
 import json
 import os
 import sys
+
+TAG_START_CRAWLING = 10
+TAG_SEARCH = 11
+TAG_NODES_STATUS = 12
+
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+size = comm.Get_size()
 
 # Add the parent directory to sys.path to import from parent directory
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -34,10 +43,12 @@ def start_crawl():
         if not isinstance(max_depth, int) or max_depth <= 0:
             return jsonify({"error": "Invalid max_depth. Must be a positive integer."}), 400
         
-        # send the urls to the master node for processing using mpi
-        # wait for the master node to return the crawled urls and store them in the resulted_url
-
-        resulted_urls = ['http://example.com/crawled1', 'http://example.com/crawled2']  # Example URLs
+        comm.send({
+            "seed_urls": seed_urls, 
+            "max_depth": max_depth
+        }, dest=0, tag=TAG_START_CRAWLING)
+        
+        resulted_urls = comm.recv(source=0, tag=TAG_START_CRAWLING)
         
         return jsonify({
             "message": "Crawl task started successfully",
@@ -57,13 +68,33 @@ def search():
         if not query:
             return jsonify({"error": "No search query provided"}), 400
         
-        # send the query and the type to the master node for processing using mpi
-        # wait for the master node to return the search results and store them in the resulted_urls
+        comm.send({
+            "query": query, 
+            "search_type": search_type
+        }, dest=0, tag=TAG_SEARCH)
+        
+        resulted_urls = comm.recv(source=0, tag=TAG_SEARCH)
 
         resulted_urls = ['http://example.com/search1', 'http://example.com/search2']  # Example URLs
 
         return jsonify({
             "resulted_urls": resulted_urls
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
+
+@app.route('/status', methods=['GET'])
+def get_system_status():
+    """API endpoint to get the status of all crawler nodes and indexers"""
+    try:
+
+        nodes = comm.recv(source=0, tag=TAG_START_CRAWLING)
+
+        return jsonify({
+            "nodes": nodes,
+            "total_active_crawlers": sum(1 for node in nodes if node["type"] == "crawler" and node["active"]),
+            "total_active_indexers": sum(1 for node in nodes if node["type"] == "indexer" and node["active"])
         }), 200
         
     except Exception as e:

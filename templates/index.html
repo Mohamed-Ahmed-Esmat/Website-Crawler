@@ -366,6 +366,114 @@
             font-weight: 500;
             color: var(--primary-color);
         }
+
+        /* Node status styles */
+        .node-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .node-card {
+            background: var(--card-bg);
+            border-radius: 0.5rem;
+            padding: 1.25rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            border-left: 4px solid var(--primary-color);
+            transition: transform 0.2s;
+        }
+
+        .node-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .node-card.active {
+            border-left-color: var(--success-color);
+        }
+
+        .node-card.inactive {
+            border-left-color: var(--error-color);
+            opacity: 0.7;
+        }
+
+        .node-type {
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .node-ip {
+            color: #6b7280;
+            font-family: monospace;
+            margin-bottom: 0.5rem;
+        }
+
+        .node-status {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .node-status.active {
+            background-color: rgba(5, 150, 105, 0.1);
+            color: var(--success-color);
+        }
+
+        .node-status.inactive {
+            background-color: rgba(220, 38, 38, 0.1);
+            color: var(--error-color);
+        }
+
+        .status-summary {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .status-item {
+            background: var(--card-bg);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .status-value {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .status-label {
+            font-size: 0.875rem;
+            color: #6b7280;
+        }
+
+        .refresh-button {
+            padding: 0.5rem 1rem;
+            background: #f3f4f6;
+            border: 1px solid var(--border-color);
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .refresh-button:hover {
+            background: #e5e7eb;
+        }
     </style>
 </head>
 
@@ -385,6 +493,9 @@
             </button>
             <button class="tab-button" data-tab="search" onclick="showTab('search')">
                 <i class="fas fa-search"></i> Search
+            </button>
+            <button class="tab-button" data-tab="nodes" onclick="showTab('nodes')">
+                <i class="fas fa-server"></i> Nodes
             </button>
         </div>
 
@@ -498,6 +609,48 @@
                 <div class="error-message">
                     <i class="fas fa-exclamation-circle"></i>
                     <span id="search_error_message"></span>
+                </div>
+            </div>
+        </div>
+
+        <div id="nodes" class="tab-content">
+            <div class="card">
+                <div class="results-header">
+                    <h2><i class="fas fa-server"></i> System Nodes</h2>
+                    <button id="refresh-nodes" class="refresh-button">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+
+                <div id="nodes_loading" style="text-align: center; padding: 2rem;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--primary-color);"></i>
+                    <p>Loading node status...</p>
+                </div>
+
+                <div id="nodes_content" style="display: none;">
+                    <div class="status-summary">
+                        <div class="status-item">
+                            <div id="total-crawlers" class="status-value">0</div>
+                            <div class="status-label">Active Crawlers</div>
+                        </div>
+                        <div class="status-item">
+                            <div id="total-indexers" class="status-value">0</div>
+                            <div class="status-label">Active Indexers</div>
+                        </div>
+                        <div class="status-item">
+                            <div id="total-nodes" class="status-value">0</div>
+                            <div class="status-label">Total Nodes</div>
+                        </div>
+                    </div>
+
+                    <div id="node-grid" class="node-grid">
+                        <!-- Node cards will be displayed here -->
+                    </div>
+                </div>
+
+                <div id="nodes_error" class="error-message" style="display: none;">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span id="nodes_error_message"></span>
                 </div>
             </div>
         </div>
@@ -686,6 +839,79 @@
             } finally {
                 setLoading(submitButton, false);
             }
+        });
+
+        // Function to fetch node status
+        async function fetchNodeStatus() {
+            const nodesLoading = document.getElementById('nodes_loading');
+            const nodesContent = document.getElementById('nodes_content');
+            const nodesError = document.getElementById('nodes_error');
+            const nodesErrorMessage = document.getElementById('nodes_error_message');
+
+            nodesLoading.style.display = 'block';
+            nodesContent.style.display = 'none';
+            nodesError.style.display = 'none';
+
+            try {
+                const response = await fetch('/status');
+                const data = await response.json();
+
+                if (response.ok) {
+                    // Update summary counts
+                    document.getElementById('total-crawlers').textContent = data.total_active_crawlers || 0;
+                    document.getElementById('total-indexers').textContent = data.total_active_indexers || 0;
+                    document.getElementById('total-nodes').textContent = data.nodes.length || 0;
+
+                    // Render node cards
+                    const nodeGrid = document.getElementById('node-grid');
+                    nodeGrid.innerHTML = '';
+
+                    if (data.nodes.length === 0) {
+                        nodeGrid.innerHTML = '<p>No nodes are currently registered in the system.</p>';
+                    } else {
+                        data.nodes.forEach(node => {
+                            const nodeCard = document.createElement('div');
+                            nodeCard.className = `node-card ${node.active ? 'active' : 'inactive'}`;
+
+                            const typeIcon = node.type === 'crawler' ? 'fa-spider' : 'fa-database';
+
+                            nodeCard.innerHTML = `
+                                <div class="node-type">
+                                    <i class="fas ${typeIcon}"></i>
+                                    ${node.type.charAt(0).toUpperCase() + node.type.slice(1)}
+                                </div>
+                                <div class="node-ip">${node.ip_address}</div>
+                                <span class="node-status ${node.active ? 'active' : 'inactive'}">
+                                    ${node.active ? 'Active' : 'Inactive'}
+                                </span>
+                            `;
+
+                            nodeGrid.appendChild(nodeCard);
+                        });
+                    }
+
+                    nodesContent.style.display = 'block';
+                } else {
+                    // Display error
+                    nodesErrorMessage.textContent = data.error || 'An unknown error occurred';
+                    nodesError.style.display = 'block';
+                }
+            } catch (err) {
+                // Handle network/unexpected errors
+                nodesErrorMessage.textContent = `Request failed: ${err.message}`;
+                nodesError.style.display = 'block';
+            } finally {
+                nodesLoading.style.display = 'none';
+            }
+        }
+
+        // Set up refresh button for nodes
+        document.getElementById('refresh-nodes').addEventListener('click', fetchNodeStatus);
+
+        // Initial setup
+        document.addEventListener('DOMContentLoaded', function () {
+            // Fetch node status when the nodes tab is first shown
+            document.querySelector('[data-tab="nodes"]').addEventListener('click', fetchNodeStatus);
         });
 
         // Set up tab navigation
