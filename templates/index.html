@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -18,7 +19,11 @@
             --border-color: #e5e7eb;
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
 
         body {
             font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
@@ -37,7 +42,7 @@
             background: var(--card-bg);
             padding: 1.5rem;
             border-radius: 0.5rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
             margin-bottom: 2rem;
         }
 
@@ -87,7 +92,7 @@
             background: var(--card-bg);
             border-radius: 0.5rem;
             padding: 1.5rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
             margin-bottom: 1.5rem;
         }
 
@@ -126,7 +131,7 @@
         select:focus {
             outline: none;
             border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
         }
 
         .btn {
@@ -171,33 +176,28 @@
         }
 
         @keyframes spin {
-            to { transform: rotate(360deg); }
+            to {
+                transform: rotate(360deg);
+            }
         }
 
         .result-card {
             border: 1px solid var(--border-color);
             border-radius: 0.5rem;
-            padding: 1.5rem;
-            margin-bottom: 1rem;
+            padding: 1rem;
+            margin-bottom: 0.75rem;
             transition: transform 0.2s;
         }
 
         .result-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
 
         .result-card h3 {
             color: var(--primary-color);
             margin-bottom: 0.5rem;
-        }
-
-        .result-card .meta {
-            font-size: 0.875rem;
-            color: #6b7280;
-            display: flex;
-            gap: 1rem;
-            margin-bottom: 1rem;
+            font-size: 1.1rem;
         }
 
         .highlight {
@@ -225,7 +225,7 @@
             white-space: pre-wrap;
             width: max-content;
             max-width: 300px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             z-index: 100;
             opacity: 0;
             visibility: hidden;
@@ -237,41 +237,29 @@
             visibility: visible;
         }
 
-        .cluster-status {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 1rem;
-        }
-
-        .status-card {
-            background: var(--card-bg);
-            padding: 1rem;
-            border-radius: 0.5rem;
-            border-left: 4px solid;
-        }
-
-        .status-card.healthy { border-left-color: var(--success-color); }
-        .status-card.warning { border-left-color: var(--warning-color); }
-        .status-card.error { border-left-color: var(--error-color); }
-
         @media (max-width: 768px) {
-            .container { padding: 1rem; }
-            .search-filters { grid-template-columns: 1fr; }
-            .cluster-status { grid-template-columns: 1fr; }
+            .container {
+                padding: 1rem;
+            }
         }
 
         .tab-content {
             display: none;
         }
-        
+
         .tab-content.active {
             display: block;
             animation: fadeIn 0.3s ease-in;
         }
-        
+
         @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
         }
 
         .help-text {
@@ -279,11 +267,6 @@
             color: #6b7280;
             margin-top: 0.25rem;
             margin-bottom: 0.5rem;
-        }
-
-        .form-group {
-            position: relative;
-            margin-bottom: 1.5rem;
         }
 
         .suggestions {
@@ -294,7 +277,7 @@
             background: white;
             border: 1px solid var(--border-color);
             border-radius: 0.375rem;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             z-index: 50;
             max-height: 200px;
             overflow-y: auto;
@@ -309,8 +292,83 @@
         .suggestions li:hover {
             background-color: #f3f4f6;
         }
+
+        /* New styles for results display */
+        .results-container {
+            margin-top: 1rem;
+        }
+
+        .results-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .url-item {
+            display: flex;
+            align-items: center;
+            padding: 0.5rem 0;
+            word-break: break-all;
+        }
+
+        .url-item i {
+            margin-right: 0.5rem;
+            color: var(--primary-color);
+        }
+
+        .url-item a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .url-item a:hover {
+            text-decoration: underline;
+        }
+
+        .scrollable-results {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 0.375rem;
+            padding: 1rem;
+            background: white;
+        }
+
+        .success-message {
+            color: var(--success-color);
+            padding: 1rem;
+            background-color: rgba(5, 150, 105, 0.1);
+            border-radius: 0.375rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .error-message {
+            color: var(--error-color);
+            padding: 1rem;
+            background-color: rgba(220, 38, 38, 0.1);
+            border-radius: 0.375rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .results-counter {
+            font-weight: 500;
+            color: var(--primary-color);
+        }
     </style>
 </head>
+
 <body>
     <div class="container">
         <div class="dashboard-header">
@@ -322,54 +380,39 @@
         </div>
 
         <div class="tab-container">
-            <button class="tab-button" data-tab="crawl" onclick="showTab('crawl')">
+            <button class="tab-button active" data-tab="crawl" onclick="showTab('crawl')">
                 <i class="fas fa-robot"></i> Crawl
             </button>
             <button class="tab-button" data-tab="search" onclick="showTab('search')">
                 <i class="fas fa-search"></i> Search
             </button>
-            <button class="tab-button" data-tab="monitor" onclick="showTab('monitor')">
-                <i class="fas fa-chart-line"></i> Monitor
-            </button>
         </div>
 
-        <div id="crawl" class="tab-content">
+        <div id="crawl" class="tab-content active">
             <div class="card">
                 <h2><i class="fas fa-robot"></i> Start New Crawl</h2>
                 <form id="crawlForm">
                     <div class="form-group">
-                        <label for="master_url">
-                            <i class="fas fa-server"></i> Master Node URL
-                            <span class="tooltip" data-tooltip="Example: http://localhost:5000 - The URL where your master node is running">
-                                <i class="fas fa-info-circle"></i>
-                            </span>
-                        </label>
-                        <input type="text" id="master_url" name="master_url" 
-                               placeholder="http://<master-ip>:5000" required>
-                        <div class="help-text">The address of your master node server</div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="query">
+                        <label for="seed_url">
                             <i class="fas fa-link"></i> Seed URL
-                            <span class="tooltip" data-tooltip="Example: https://www.python.org - Enter a full URL including https://">
+                            <span class="tooltip"
+                                data-tooltip="Example: https://www.python.org - Enter a full URL including https://">
                                 <i class="fas fa-info-circle"></i>
                             </span>
                         </label>
-                        <input type="text" id="query" name="query" 
-                               placeholder="https://example.com" required>
+                        <input type="text" id="seed_url" name="seed_url" placeholder="https://example.com" required>
                         <div class="help-text">The website where crawling will begin</div>
                     </div>
 
                     <div class="form-group">
                         <label for="max_depth">
                             <i class="fas fa-level-down-alt"></i> Max Depth
-                            <span class="tooltip" data-tooltip="Example: 3 - A depth of 3 means it will follow links up to 3 clicks away from the start page">
+                            <span class="tooltip"
+                                data-tooltip="Example: 3 - A depth of 3 means it will follow links up to 3 clicks away from the start page">
                                 <i class="fas fa-info-circle"></i>
                             </span>
                         </label>
-                        <input type="number" id="max_depth" name="max_depth" 
-                               value="3" min="1" max="10">
+                        <input type="number" id="max_depth" name="max_depth" value="3" min="1" max="10">
                         <div class="help-text">Higher values will crawl more pages but take longer</div>
                     </div>
 
@@ -378,116 +421,59 @@
                     </button>
                 </form>
             </div>
-            <div id="crawl_response" class="card" style="display:none;"></div>
-            <div id="crawl_error" class="card" style="display:none;"></div>
+
+            <div id="crawl_results" class="card" style="display:none;">
+                <h3><i class="fas fa-list"></i> Crawl Results</h3>
+                <div id="crawl_status" class="success-message" style="display:none;"></div>
+                <div class="results-header">
+                    <span>Discovered URLs:</span>
+                    <span id="crawl_counter" class="results-counter">0 URLs</span>
+                </div>
+                <div class="scrollable-results">
+                    <ul id="crawl_urls_list" class="results-list">
+                        <!-- Crawl results will be displayed here -->
+                    </ul>
+                </div>
+            </div>
+
+            <div id="crawl_error" class="card" style="display:none;">
+                <div class="error-message">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span id="crawl_error_message"></span>
+                </div>
+            </div>
         </div>
 
         <div id="search" class="tab-content">
             <div class="card">
                 <h2><i class="fas fa-search"></i> Search</h2>
                 <form id="searchForm">
-                    <div class="search-filters">
-                        <div class="form-group">
-                            <label for="search_query">
-                                <i class="fas fa-keyboard"></i> Search Query
-                                <span class="tooltip" data-tooltip="Examples:&#10;Keyword: machine learning&#10;Phrase: &quot;artificial intelligence&quot;&#10;Fuzzy: progamming (will match 'programming')&#10;Wildcard: py* (will match python, pytest, etc)">
-                                    <i class="fas fa-info-circle"></i>
-                                </span>
-                            </label>
-                            <input type="text" id="search_query" name="search_query" 
-                                   placeholder="Enter search terms..." required>
-                            <ul id="suggestions" class="suggestions"></ul>
-                        </div>
+                    <div class="form-group">
+                        <label for="search_query">
+                            <i class="fas fa-keyboard"></i> Search Query
+                            <span class="tooltip"
+                                data-tooltip="Examples:&#10;Keyword: machine learning&#10;Phrase: &quot;artificial intelligence&quot;&#10;Fuzzy: progamming (will match 'programming')&#10;Wildcard: py* (will match python, pytest, etc)">
+                                <i class="fas fa-info-circle"></i>
+                            </span>
+                        </label>
+                        <input type="text" id="search_query" name="search_query" placeholder="Enter search terms..."
+                            required>
+                    </div>
 
-                        <div class="form-group">
-                            <label for="search_type">
-                                <i class="fas fa-filter"></i> Search Type
-                                <span class="tooltip" data-tooltip="Keyword: Basic word matching&#10;Phrase: Exact phrase matching&#10;Fuzzy: Tolerates typos&#10;Wildcard: Use * and ? as wildcards">
-                                    <i class="fas fa-info-circle"></i>
-                                </span>
-                            </label>
-                            <select id="search_type" name="search_type">
-                                <option value="keyword">Keyword Search</option>
-                                <option value="phrase">Exact Phrase</option>
-                                <option value="fuzzy">Fuzzy Search</option>
-                                <option value="wildcard">Wildcard Search</option>
-                            </select>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="from_date">
-                                <i class="fas fa-calendar-alt"></i> From Date
-                                <span class="tooltip" data-tooltip="Example: 2025-01-01 - Filter results from this date onwards">
-                                    <i class="fas fa-info-circle"></i>
-                                </span>
-                            </label>
-                            <input type="date" id="from_date" name="from_date">
-                        </div>
-
-                        <div class="form-group">
-                            <label for="to_date">
-                                <i class="fas fa-calendar-alt"></i> To Date
-                                <span class="tooltip" data-tooltip="Example: 2025-05-01 - Filter results up to this date">
-                                    <i class="fas fa-info-circle"></i>
-                                </span>
-                            </label>
-                            <input type="date" id="to_date" name="to_date">
-                        </div>
-
-                        <div class="form-group">
-                            <label for="domain">
-                                <i class="fas fa-globe"></i> Domain Filter
-                                <span class="tooltip" data-tooltip="Example: python.org - Only show results from this domain">
-                                    <i class="fas fa-info-circle"></i>
-                                </span>
-                            </label>
-                            <input type="text" id="domain" name="domain" 
-                                   placeholder="e.g., example.com">
-                        </div>
-
-                        <div class="form-group">
-                            <label for="min_words">
-                                <i class="fas fa-file-alt"></i> Minimum Word Count
-                                <span class="tooltip" data-tooltip="Minimum number of words a page must have">
-                                    <i class="fas fa-info-circle"></i>
-                                </span>
-                            </label>
-                            <input type="number" id="min_words" name="min_words" 
-                                   placeholder="e.g., 100" min="0">
-                        </div>
-
-                        <div class="form-group">
-                            <label for="max_words">
-                                <i class="fas fa-file-alt"></i> Maximum Word Count
-                                <span class="tooltip" data-tooltip="Maximum number of words a page can have">
-                                    <i class="fas fa-info-circle"></i>
-                                </span>
-                            </label>
-                            <input type="number" id="max_words" name="max_words" 
-                                   placeholder="e.g., 1000" min="0">
-                        </div>
-
-                        <div class="form-group">
-                            <label for="location">
-                                <i class="fas fa-map-marker-alt"></i> Location Search
-                                <span class="tooltip" data-tooltip="Format: latitude,longitude (e.g., 40.7128,-74.0060 for New York)">
-                                    <i class="fas fa-info-circle"></i>
-                                </span>
-                            </label>
-                            <input type="text" id="location" name="location" 
-                                   placeholder="e.g., 40.7128,-74.0060">
-                        </div>
-
-                        <div class="form-group">
-                            <label for="distance">
-                                <i class="fas fa-circle-notch"></i> Search Radius
-                                <span class="tooltip" data-tooltip="Distance from location point (append km or mi)">
-                                    <i class="fas fa-info-circle"></i>
-                                </span>
-                            </label>
-                            <input type="text" id="distance" name="distance" 
-                                   placeholder="e.g., 10km or 5mi">
-                        </div>
+                    <div class="form-group">
+                        <label for="search_type">
+                            <i class="fas fa-filter"></i> Search Type
+                            <span class="tooltip"
+                                data-tooltip="Keyword: Basic word matching&#10;Phrase: Exact phrase matching&#10;Fuzzy: Tolerates typos&#10;Wildcard: Use * and ? as wildcards">
+                                <i class="fas fa-info-circle"></i>
+                            </span>
+                        </label>
+                        <select id="search_type" name="search_type">
+                            <option value="keyword">Keyword Search</option>
+                            <option value="phrase">Exact Phrase</option>
+                            <option value="fuzzy">Fuzzy Search</option>
+                            <option value="wildcard">Wildcard Search</option>
+                        </select>
                     </div>
 
                     <button type="submit" class="btn btn-primary">
@@ -495,135 +481,52 @@
                     </button>
                 </form>
             </div>
-            <div id="search_results"></div>
-            <div id="facets" class="facets"></div>
-            <div id="pagination" class="pagination"></div>
-            <div id="search_error" class="card" style="display:none;"></div>
-        </div>
 
-        <div id="monitor" class="tab-content">
-            <div class="card">
-                <h2><i class="fas fa-chart-line"></i> Cluster Health Monitor</h2>
-                <div class="cluster-status">
-                    <div id="local-cluster-status"></div>
-                    <div id="remote-clusters-status"></div>
+            <div id="search_results" class="card" style="display:none;">
+                <h3><i class="fas fa-search"></i> Search Results</h3>
+                <div class="results-header">
+                    <span id="search_counter" class="results-counter">0 results</span>
+                </div>
+                <div class="scrollable-results">
+                    <ul id="search_urls_list" class="results-list">
+                        <!-- Search results will be displayed here -->
+                    </ul>
                 </div>
             </div>
 
-            <div class="card">
-                <h2><i class="fas fa-search"></i> Cross-Cluster Search</h2>
-                <form id="crossClusterSearchForm">
-                    <div class="search-filters">
-                        <div class="form-group">
-                            <label for="cross_search_query">
-                                <i class="fas fa-keyboard"></i> Search Query
-                                <span class="tooltip" data-tooltip="Enter your search terms">
-                                    <i class="fas fa-info-circle"></i>
-                                </span>
-                            </label>
-                            <input type="text" id="cross_search_query" name="cross_search_query" 
-                                   placeholder="Enter search terms..." required>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="cross_search_type">
-                                <i class="fas fa-filter"></i> Search Type
-                                <span class="tooltip" data-tooltip="Choose the type of search">
-                                    <i class="fas fa-info-circle"></i>
-                                </span>
-                            </label>
-                            <select id="cross_search_type" name="cross_search_type">
-                                <option value="keyword">Keyword Search</option>
-                                <option value="phrase">Exact Phrase</option>
-                                <option value="fuzzy">Fuzzy Search</option>
-                                <option value="wildcard">Wildcard Search</option>
-                            </select>
-                        </div>
-
-                        <div class="form-group">
-                            <label>Clusters to Search:</label>
-                            <div id="cluster-checkboxes" class="cluster-selection">
-                                <!-- Dynamically populated -->
-                            </div>
-                        </div>
-                    </div>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-search"></i> Search Across Clusters
-                    </button>
-                </form>
+            <div id="search_error" class="card" style="display:none;">
+                <div class="error-message">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span id="search_error_message"></span>
+                </div>
             </div>
-            <div id="cross_search_results"></div>
-            <div id="cross_search_error" class="card" style="display:none;"></div>
         </div>
     </div>
 
     <script>
-        let currentPage = 1;
-        const PAGE_SIZE = 10;
-        let totalResults = 0;
-        let suggestionTimeout = null;
-
+        // Function to show the active tab
         function showTab(tabId) {
             // Hide all tab contents
             document.querySelectorAll('.tab-content').forEach(content => {
                 content.classList.remove('active');
                 content.style.display = 'none';
             });
-            
+
             // Remove active class from all buttons
             document.querySelectorAll('.tab-button').forEach(button => {
                 button.classList.remove('active');
             });
-            
-            // Show selected tab content with animation
+
+            // Show selected tab content
             const selectedTab = document.getElementById(tabId);
             selectedTab.style.display = 'block';
-            // Force a reflow to ensure the animation works
-            void selectedTab.offsetWidth;
             selectedTab.classList.add('active');
-            
+
             // Add active class to clicked button
             document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
-            
-            // Clear any existing search results when switching tabs
-            if (tabId !== 'search') {
-                document.getElementById('search_results').innerHTML = '';
-                document.getElementById('facets').innerHTML = '';
-                document.getElementById('pagination').innerHTML = '';
-                document.getElementById('search_error').style.display = 'none';
-            }
         }
 
-        // Set initial tab based on URL hash or default to 'crawl'
-        document.addEventListener('DOMContentLoaded', function() {
-            const hash = window.location.hash.substring(1) || 'crawl';
-            showTab(hash);
-            
-            // Add input validation
-            document.querySelectorAll('input[type="url"]').forEach(input => {
-                input.addEventListener('input', function() {
-                    if (this.value && !isValidUrl(this.value)) {
-                        this.setCustomValidity('Please enter a valid URL');
-                    } else {
-                        this.setCustomValidity('');
-                    }
-                });
-            });
-
-            // Set today as the default max date for date inputs
-            const today = new Date().toISOString().split('T')[0];
-            document.getElementById('to_date').max = today;
-            document.getElementById('from_date').max = today;
-        });
-
-        // Update URL hash when switching tabs
-        document.querySelectorAll('.tab-button').forEach(button => {
-            button.addEventListener('click', function() {
-                const tabId = this.getAttribute('data-tab');
-                window.location.hash = tabId;
-            });
-        });
-
+        // Helper function to set loading state on buttons
         function setLoading(buttonElement, isLoading) {
             if (isLoading) {
                 buttonElement.classList.add('loading');
@@ -634,412 +537,165 @@
             }
         }
 
-        document.getElementById('crawlForm').onsubmit = async function(e) {
-            e.preventDefault();
-            const submitButton = e.target.querySelector('button[type="submit"]');
-            setLoading(submitButton, true);
-            
-            document.getElementById('crawl_response').style.display = 'none';
-            document.getElementById('crawl_error').style.display = 'none';
-            
+        // Helper function to validate URLs
+        function isValidUrl(string) {
             try {
-                const formData = new FormData(e.target);
-                const res = await fetch('/submit', {
+                new URL(string);
+                return true;
+            } catch (_) {
+                return false;
+            }
+        }
+
+        // Crawl form submission
+        document.getElementById('crawlForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+            const submitButton = this.querySelector('button[type="submit"]');
+            setLoading(submitButton, true);
+
+            // Clear previous results
+            document.getElementById('crawl_results').style.display = 'none';
+            document.getElementById('crawl_error').style.display = 'none';
+
+            try {
+                const seedUrl = document.getElementById('seed_url').value;
+                const maxDepth = parseInt(document.getElementById('max_depth').value);
+
+                const response = await fetch('/start-crawl', {
                     method: 'POST',
-                    body: formData
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        seed_urls: [seedUrl],
+                        max_depth: maxDepth
+                    })
                 });
-                const data = await res.json();
-                
-                if (res.ok) {
-                    const responseDiv = document.getElementById('crawl_response');
-                    responseDiv.innerHTML = `
-                        <div class="success-message">
-                            <i class="fas fa-check-circle"></i>
-                            ${data.message}
-                        </div>
-                    `;
-                    responseDiv.style.display = 'block';
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    // Display crawl results
+                    const resultsContainer = document.getElementById('crawl_results');
+                    const statusElement = document.getElementById('crawl_status');
+                    const counterElement = document.getElementById('crawl_counter');
+                    const urlsList = document.getElementById('crawl_urls_list');
+
+                    // Display status message
+                    statusElement.textContent = data.message;
+                    statusElement.style.display = 'block';
+
+                    // Update counter
+                    counterElement.textContent = `${data.resulted_urls.length} URLs`;
+
+                    // Clear and populate URLs list
+                    urlsList.innerHTML = '';
+                    data.resulted_urls.forEach(url => {
+                        const li = document.createElement('li');
+                        li.className = 'url-item';
+                        li.innerHTML = `
+                            <i class="fas fa-link"></i>
+                            <a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>
+                        `;
+                        urlsList.appendChild(li);
+                    });
+
+                    // Show results container
+                    resultsContainer.style.display = 'block';
                 } else {
-                    const errorDiv = document.getElementById('crawl_error');
-                    errorDiv.innerHTML = `
-                        <div class="error-message">
-                            <i class="fas fa-exclamation-circle"></i>
-                            ${data.error}
-                        </div>
-                    `;
-                    errorDiv.style.display = 'block';
+                    // Display error
+                    const errorContainer = document.getElementById('crawl_error');
+                    const errorMessageElement = document.getElementById('crawl_error_message');
+                    errorMessageElement.textContent = data.error || 'An unknown error occurred';
+                    errorContainer.style.display = 'block';
                 }
             } catch (err) {
-                const errorDiv = document.getElementById('crawl_error');
-                errorDiv.innerHTML = `
-                    <div class="error-message">
-                        <i class="fas fa-exclamation-circle"></i>
-                        Request failed: ${err}
-                    </div>
-                `;
-                errorDiv.style.display = 'block';
+                // Handle network/unexpected errors
+                const errorContainer = document.getElementById('crawl_error');
+                const errorMessageElement = document.getElementById('crawl_error_message');
+                errorMessageElement.textContent = `Request failed: ${err.message}`;
+                errorContainer.style.display = 'block';
             } finally {
                 setLoading(submitButton, false);
             }
-        };
-
-        document.getElementById('searchForm').onsubmit = async function(e) {
-            e.preventDefault();
-            await performSearch(1);
-        };
-
-        async function performSearch(page) {
-            const master_url = document.getElementById('master_url').value;
-            const query = document.getElementById('search_query').value;
-            const searchType = document.getElementById('search_type').value;
-            const fromDate = document.getElementById('from_date').value;
-            const toDate = document.getElementById('to_date').value;
-            const domain = document.getElementById('domain').value;
-            const minWords = document.getElementById('min_words').value;
-            const maxWords = document.getElementById('max_words').value;
-            const location = document.getElementById('location').value;
-            const distance = document.getElementById('distance').value;
-
-            try {
-                const params = new URLSearchParams({
-                    master_url,
-                    query,
-                    type: searchType,
-                    page: page,
-                    page_size: PAGE_SIZE
-                });
-                
-                if (fromDate) params.append('from_date', fromDate);
-                if (toDate) params.append('to_date', toDate);
-                if (domain) params.append('domain', domain);
-                if (minWords) params.append('min_words', minWords);
-                if (maxWords) params.append('max_words', maxWords);
-                if (location) params.append('location', location);
-                if (distance) params.append('distance', distance);
-
-                const res = await fetch(`/search?${params}`);
-                const data = await res.json();
-                
-                if (res.ok) {
-                    displayResults(data);
-                    displayFacets(data.facets);
-                    displayPagination(data.total, page);
-                } else {
-                    document.getElementById('search_error').innerText = data.error;
-                    document.getElementById('search_error').style.display = 'block';
-                }
-            } catch (err) {
-                document.getElementById('search_error').innerText = 'Search failed: ' + err;
-                document.getElementById('search_error').style.display = 'block';
-            }
-        }
-
-        function displayResults(data) {
-            const resultsDiv = document.getElementById('search_results');
-            resultsDiv.innerHTML = '';
-
-            if (data.results.length === 0) {
-                resultsDiv.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-search"></i>
-                        <p>No results found.</p>
-                    </div>
-                `;
-                return;
-            }
-
-            const resultsList = document.createElement('div');
-            resultsList.className = 'results-list';
-            
-            data.results.forEach(result => {
-                const resultItem = document.createElement('div');
-                resultItem.className = 'result-card';
-
-                resultItem.innerHTML = `
-                    <h3>
-                        <i class="fas fa-globe"></i>
-                        <a href="${result.url}" target="_blank" rel="noopener noreferrer">
-                            ${result.url}
-                        </a>
-                    </h3>
-                    <div class="meta">
-                        <span><i class="fas fa-star"></i> Score: ${result.score.toFixed(2)}</span>
-                        <span><i class="fas fa-file-alt"></i> Words: ${result.word_count}</span>
-                        <span><i class="fas fa-globe"></i> ${result.domain}</span>
-                    </div>
-                    ${result.highlights ? 
-                        `<div class="highlights">
-                            ${result.highlights.map(h => 
-                                `<p><i class="fas fa-quote-left"></i> ...${h}...</p>`
-                            ).join('')}
-                        </div>` : ''}
-                    <div class="timestamp">
-                        <i class="fas fa-clock"></i>
-                        Indexed: ${new Date(result.timestamp).toLocaleString()}
-                    </div>
-                    ${result.location ? 
-                        `<div class="location">
-                            <i class="fas fa-map-marker-alt"></i>
-                            Location: ${result.location.lat}, ${result.location.lon}
-                        </div>` : ''}
-                `;
-                resultsList.appendChild(resultItem);
-            });
-            
-            resultsDiv.appendChild(resultsList);
-        }
-
-        function displayFacets(facets) {
-            const facetsDiv = document.getElementById('facets');
-            facetsDiv.innerHTML = `
-                <h3>Statistics</h3>
-                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;">
-                    <div>
-                        <h4>Top Domains</h4>
-                        <ul>
-                            ${facets.domains.map(domain => 
-                                `<li>${domain.key}: ${domain.doc_count} pages</li>`
-                            ).join('')}
-                        </ul>
-                    </div>
-                    <div>
-                        <h4>Word Count Stats</h4>
-                        <p>Average: ${Math.round(facets.word_count_stats.avg)} words</p>
-                        <p>Min: ${facets.word_count_stats.min} words</p>
-                        <p>Max: ${facets.word_count_stats.max} words</p>
-                    </div>
-                </div>
-            `;
-        }
-
-        function displayPagination(total, currentPage) {
-            const totalPages = Math.ceil(total / PAGE_SIZE);
-            const paginationDiv = document.getElementById('pagination');
-            paginationDiv.innerHTML = '';
-            
-            if (totalPages <= 1) return;
-
-            if (currentPage > 1) {
-                paginationDiv.innerHTML += `
-                    <button onclick="performSearch(${currentPage - 1})">Previous</button>
-                `;
-            }
-
-            paginationDiv.innerHTML += `<span>Page ${currentPage} of ${totalPages}</span>`;
-
-            if (currentPage < totalPages) {
-                paginationDiv.innerHTML += `
-                    <button onclick="performSearch(${currentPage + 1})">Next</button>
-                `;
-            }
-        }
-
-        document.getElementById('search_query').addEventListener('input', function(e) {
-            clearTimeout(suggestionTimeout);
-            const query = e.target.value;
-            
-            if (query.length < 2) {
-                document.getElementById('suggestions').innerHTML = '';
-                return;
-            }
-
-            suggestionTimeout = setTimeout(async () => {
-                const master_url = document.getElementById('master_url').value;
-                if (!master_url) return;
-
-                try {
-                    const res = await fetch(`/suggest?master_url=${encodeURIComponent(master_url)}&prefix=${encodeURIComponent(query)}`);
-                    const data = await res.json();
-                    
-                    if (res.ok && data.suggestions) {
-                        const suggestionsList = document.getElementById('suggestions');
-                        suggestionsList.innerHTML = data.suggestions
-                            .map(suggestion => `<li onclick="selectSuggestion('${suggestion}')">${suggestion}</li>`)
-                            .join('');
-                    }
-                } catch (err) {
-                    console.error('Error getting suggestions:', err);
-                }
-            }, 300);
         });
 
-        function selectSuggestion(suggestion) {
-            document.getElementById('search_query').value = suggestion;
-            document.getElementById('suggestions').innerHTML = '';
-        }
-
-        async function updateClusterHealth() {
-            const master_url = document.getElementById('master_url').value;
-            if (!master_url) return;
-
-            try {
-                const token = await getAuthToken(master_url);
-                const res = await fetch(`${master_url}/cluster-health`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const data = await res.json();
-                
-                if (res.ok) {
-                    displayClusterHealth(data);
-                    updateClusterCheckboxes(data);
-                } else {
-                    console.error('Failed to fetch cluster health:', data.error);
-                }
-            } catch (err) {
-                console.error('Error updating cluster health:', err);
-            }
-        }
-
-        function displayClusterHealth(data) {
-            const localStatus = document.getElementById('local-cluster-status');
-            localStatus.innerHTML = `
-                <div class="status-card ${getHealthClass(data.local_cluster.status)}">
-                    <h4><i class="fas fa-server"></i> Local Cluster</h4>
-                    <div class="status-details">
-                        <p><i class="fas fa-signal"></i> Status: ${data.local_cluster.status}</p>
-                        <p><i class="fas fa-network-wired"></i> Nodes: ${data.local_cluster.number_of_nodes}</p>
-                        <p><i class="fas fa-database"></i> Documents: ${data.local_cluster.active_shards}</p>
-                    </div>
-                </div>
-            `;
-
-            const remoteStatus = document.getElementById('remote-clusters-status');
-            remoteStatus.innerHTML = Object.entries(data.remote_clusters)
-                .map(([name, info]) => `
-                    <div class="status-card ${info.connected ? 'healthy' : 'error'}">
-                        <h4><i class="fas fa-cloud"></i> ${name}</h4>
-                        <div class="status-details">
-                            <p>
-                                <i class="fas ${info.connected ? 'fa-check-circle' : 'fa-times-circle'}"></i>
-                                Status: ${info.connected ? 'Connected' : 'Disconnected'}
-                            </p>
-                            ${info.connected ? `
-                                <p><i class="fas fa-network-wired"></i> Nodes: ${info.num_nodes}</p>
-                                <p><i class="fas fa-plug"></i> Max Connections: ${info.max_connections}</p>
-                            ` : `
-                                <p class="error-message">
-                                    <i class="fas fa-exclamation-triangle"></i>
-                                    Error: ${info.error}
-                                </p>
-                            `}
-                        </div>
-                    </div>
-                `).join('');
-        }
-
-        function getHealthClass(status) {
-            switch (status.toLowerCase()) {
-                case 'green': return 'healthy';
-                case 'yellow': return 'warning';
-                default: return 'error';
-            }
-        }
-
-        function updateClusterCheckboxes(data) {
-            const container = document.getElementById('cluster-checkboxes');
-            container.innerHTML = `
-                <label>
-                    <input type="checkbox" name="clusters" value="local" checked>
-                    Local Cluster
-                </label>
-            `;
-            
-            Object.keys(data.remote_clusters).forEach(name => {
-                const connected = data.remote_clusters[name].connected;
-                container.innerHTML += `
-                    <label ${!connected ? 'class="disabled"' : ''}>
-                        <input type="checkbox" name="clusters" value="${name}" 
-                               ${connected ? 'checked' : 'disabled'}>
-                        ${name} ${!connected ? '(Disconnected)' : ''}
-                    </label>
-                `;
-            });
-        }
-
-        document.getElementById('crossClusterSearchForm').onsubmit = async function(e) {
+        // Search form submission
+        document.getElementById('searchForm').addEventListener('submit', async function (e) {
             e.preventDefault();
-            const master_url = document.getElementById('master_url').value;
-            const query = document.getElementById('cross_search_query').value;
-            const searchType = document.getElementById('cross_search_type').value;
-            
-            const selectedClusters = Array.from(document.querySelectorAll('input[name="clusters"]:checked'))
-                .map(cb => cb.value)
-                .filter(v => v !== 'local')
-                .join(',');
+            const submitButton = this.querySelector('button[type="submit"]');
+            setLoading(submitButton, true);
+
+            // Clear previous results
+            document.getElementById('search_results').style.display = 'none';
+            document.getElementById('search_error').style.display = 'none';
 
             try {
-                const token = await getAuthToken(master_url);
+                const query = document.getElementById('search_query').value;
+                const searchType = document.getElementById('search_type').value;
+
                 const params = new URLSearchParams({
-                    query,
-                    type: searchType,
-                    clusters: selectedClusters
+                    query: query,
+                    type: searchType
                 });
 
-                const res = await fetch(`${master_url}/cross-cluster-search?${params}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const data = await res.json();
-                
-                if (res.ok) {
-                    displayCrossClusterResults(data);
+                const response = await fetch(`/search?${params}`);
+                const data = await response.json();
+
+                if (response.ok) {
+                    // Display search results
+                    const resultsContainer = document.getElementById('search_results');
+                    const counterElement = document.getElementById('search_counter');
+                    const urlsList = document.getElementById('search_urls_list');
+
+                    // Update counter
+                    counterElement.textContent = `${data.resulted_urls.length} results`;
+
+                    // Clear and populate URLs list
+                    urlsList.innerHTML = '';
+
+                    if (data.resulted_urls.length === 0) {
+                        urlsList.innerHTML = '<li class="url-item">No results found</li>';
+                    } else {
+                        data.resulted_urls.forEach(url => {
+                            const li = document.createElement('li');
+                            li.className = 'url-item';
+                            li.innerHTML = `
+                                <i class="fas fa-globe"></i>
+                                <a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>
+                            `;
+                            urlsList.appendChild(li);
+                        });
+                    }
+
+                    // Show results container
+                    resultsContainer.style.display = 'block';
                 } else {
-                    document.getElementById('cross_search_error').innerText = data.error;
-                    document.getElementById('cross_search_error').style.display = 'block';
+                    // Display error
+                    const errorContainer = document.getElementById('search_error');
+                    const errorMessageElement = document.getElementById('search_error_message');
+                    errorMessageElement.textContent = data.error || 'An unknown error occurred';
+                    errorContainer.style.display = 'block';
                 }
             } catch (err) {
-                document.getElementById('cross_search_error').innerText = 'Error performing cross-cluster search: ' + err;
-                document.getElementById('cross_search_error').style.display = 'block';
+                // Handle network/unexpected errors
+                const errorContainer = document.getElementById('search_error');
+                const errorMessageElement = document.getElementById('search_error_message');
+                errorMessageElement.textContent = `Search failed: ${err.message}`;
+                errorContainer.style.display = 'block';
+            } finally {
+                setLoading(submitButton, false);
             }
-        };
+        });
 
-        function displayCrossClusterResults(data) {
-            const resultsDiv = document.getElementById('cross_search_results');
-            resultsDiv.innerHTML = '';
-
-            if (!data.results || data.results.length === 0) {
-                resultsDiv.innerHTML = '<p>No results found.</p>';
-                return;
-            }
-
-            resultsDiv.innerHTML = `
-                <div class="cluster-summary">
-                    <h4>Search Results from ${data.clusters.participating.length} clusters:</h4>
-                    <ul>
-                        ${data.clusters.participating.map(cluster => `
-                            <li>${cluster}: ${data.clusters.stats[cluster].doc_count} results 
-                                (avg score: ${data.clusters.stats[cluster].avg_score.toFixed(2)})</li>
-                        `).join('')}
-                    </ul>
-                </div>
-            `;
-
-            const resultsList = document.createElement('div');
-            data.results.forEach(result => {
-                const resultItem = document.createElement('div');
-                resultItem.className = 'search-result';
-                resultItem.style.margin = '20px 0';
-                resultItem.style.padding = '15px';
-                resultItem.style.borderBottom = '1px solid #eee';
-
-                resultItem.innerHTML = `
-                    <h3>
-                        <a href="${result.url}" target="_blank">${result.url}</a>
-                        <span class="cluster-badge">${result.cluster}</span>
-                    </h3>
-                    <p>Score: ${result.score.toFixed(2)} | Words: ${result.word_count}</p>
-                    ${result.highlights ? 
-                        `<div class="highlights">${result.highlights.map(h => 
-                            `<p>...${h}...</p>`).join('')}</div>` : ''}
-                    <small>Domain: ${result.domain} | Indexed: ${new Date(result.timestamp).toLocaleString()}</small>
-                `;
-                resultsList.appendChild(resultItem);
+        // Set up tab navigation
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.addEventListener('click', function () {
+                const tabId = this.getAttribute('data-tab');
+                showTab(tabId);
             });
-            
-            resultsDiv.appendChild(resultsList);
-        }
-
-        setInterval(updateClusterHealth, 30000);
-        updateClusterHealth();
+        });
     </script>
 </body>
+
 </html>
