@@ -1,0 +1,15 @@
+Metadata-Version: 2.4
+Name: website-crawler
+Version: 0.1.0
+Summary: Add your description here
+Requires-Python: >=3.12
+Description-Content-Type: text/markdown
+Requires-Dist: bs4>=0.0.2
+Requires-Dist: elasticsearch>=9.0.0
+Requires-Dist: flask>=3.1.0
+Requires-Dist: pip>=25.1
+Requires-Dist: requests>=2.32.3
+Requires-Dist: whoosh>=2.7.4
+
+# Website-Crawler
+Utilizes Distributed systems to crawl given website urls
