@@ -125,19 +125,6 @@ def process_url_batch(urls_batch, max_depth, comm, rank, current_depth=1):
             processed_urls += 1
             logging.info(f"Crawler {rank} processing URL: {url} (depth {current_depth}/{max_depth}) - Progress: {processed_urls}/{total_urls}")
             
-            # Send detailed status update (not just heartbeat)
-            comm.send({
-                "status": STATUS_WORKING, 
-                "url": url, 
-                "depth": current_depth,
-                "progress": {
-                    "current": processed_urls,
-                    "total": total_urls,
-                    "percentage": round((processed_urls / total_urls) * 100, 1)
-                },
-                "timestamp": datetime.now().isoformat()
-            }, dest=0, tag=TAG_STATUS_UPDATE)
-            
             # Check robots.txt first
             if not check_robots_txt(url):
                 error_msg = f"Crawling disallowed by robots.txt for {url}"
@@ -299,21 +286,11 @@ def crawler_process():
                     # Ensure `urls_batch` contains only strings (actual URLs)
                     if urls_batch and all(isinstance(url, str) for url in urls_batch):
                         logging.info(f"Crawler {rank} received batch of {len(urls_batch)} URLs with max depth {max_depth}")
-                        comm.send({
-                            "status": STATUS_WORKING,
-                            "message": f"Starting work on batch of {len(urls_batch)} URLs",
-                            "timestamp": datetime.now().isoformat()
-                        }, dest=0, tag=TAG_STATUS_UPDATE)
 
                         # Process the URLs
                         process_url_batch(urls_batch, max_depth, comm, rank)
                     else:
                         logging.warning(f"Crawler {rank} received invalid URL batch: {urls_batch}")
-                        comm.send({
-                            "status": STATUS_IDLE,
-                            "error": "Received invalid URL batch",
-                            "timestamp": datetime.now().isoformat()
-                        }, dest=0, tag=TAG_STATUS_UPDATE)
                         
                 else:  # Backward compatibility for single URL
                     url_to_crawl = crawl_task
