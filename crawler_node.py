@@ -254,16 +254,7 @@ def crawler_process():
     Process for a crawler node.
     Fetches web pages, extracts URLs, and sends results back to the master.
     """
-    #test the redis 
-    try:
-        r.ping()
-        logging.info("Connected to Redis successfully")
-    except redis.ConnectionError as e:
-        logging.error(f"Redis connection error: {e}")
-        return
-
-    r.sismember(REDIS_CRAWLED_URLS_SET, "test_url")  # Test if Redis is reachable
-    logging.info("Redis is reachable")
+    
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     size = comm.Get_size()
