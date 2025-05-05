@@ -40,6 +40,11 @@ TAG_STATUS_UPDATE = 99
 TAG_HEARTBEAT = 98
 TAG_ERROR_REPORT = 999
 
+# Redis key for set of crawled URLs
+REDIS_CRAWLED_URLS_SET = "crawled_urls"
+
+# Create Redis connection once as a global variable
+r = redis.Redis(host='10.10.0.2', port=6379, decode_responses=True, password='password123')
 
 def hash_url(url):
     return hashlib.sha256(url.encode()).hexdigest()
@@ -130,6 +135,11 @@ def process_url_batch(urls_batch, max_depth, comm, rank, current_depth=1):
             processed_urls += 1
             logging.info(f"Crawler {rank} processing URL: {url} (depth {current_depth}/{max_depth}) - Progress: {processed_urls}/{total_urls}")
             
+            # Check if URL has already been crawled
+            if r.sismember(REDIS_CRAWLED_URLS_SET, hash_url(url)):
+                logging.info(f"URL {url} has already been crawled. Skipping.")
+                continue
+            
             # Check robots.txt first
             if not check_robots_txt(url):
                 error_msg = f"Crawling disallowed by robots.txt for {url}"
@@ -184,6 +194,9 @@ def process_url_batch(urls_batch, max_depth, comm, rank, current_depth=1):
             # Add extracted URLs to the collection if we haven't reached max depth
             if current_depth < max_depth:
                 all_new_urls.extend(extracted_urls)
+            
+            # Mark URL as crawled in Redis
+            r.sadd(REDIS_CRAWLED_URLS_SET, hash_url(url))
                 
             # Send status update with SUCCESS
             comm.send({
@@ -241,60 +254,16 @@ def crawler_process():
     Process for a crawler node.
     Fetches web pages, extracts URLs, and sends results back to the master.
     """
+    #test the redis 
+    try:
+        r.ping()
+        logging.info("Connected to Redis successfully")
+    except redis.ConnectionError as e:
+        logging.error(f"Redis connection error: {e}")
+        return
 
-    r = redis.Redis(host='10.10.0.2', port=6379, decode_responses=True)
-
-    print("Redis connection established")
-    url = "http://example.com"
-    hashed = hash_url(url)
-    print("the url to be crawled is: ", url, " NOT added")
-    print("checking if the url is already crawled")
-    if r.sismember("crawled_urls", hashed):
-        print("Already crawled:", url)
-    else:
-        print("Not crawled")
-        r.sadd("crawled_urls", hashed)
-        print("Added to crawled URLs set")
-
-    url = "http://example.com"
-    hashed = hash_url(url)
-    print("the url to be crawled is: ", url, " added")
-    print("checking if the url is already crawled")
-    if r.sismember("crawled_urls", hashed):
-        print("Already crawled:", url)
-    else:
-        print("Not crawled")
-        r.sadd("crawled_urls", hashed)
-        print("Added to crawled URLs set")
-
-    url = "http://example2.com"
-    hashed = hash_url(url)
-    print("the url to be crawled is: ", url, " NOT added")
-    print("checking if the url is already crawled")
-    if r.sismember("crawled_urls", hashed):
-        print("Already crawled:", url)
-    else:
-        print("Not crawled")
-        r.sadd("crawled_urls", hashed)
-        print("Added to crawled URLs set")
-
-    url = "http://example2.com"
-    hashed = hash_url(url)
-    print("the url to be crawled is: ", url, " added")
-    print("checking if the url is already crawled")
-    if r.sismember("crawled_urls", hashed):
-        print("Already crawled:", url)
-    else:
-        print("Not crawled")
-        r.sadd("crawled_urls", hashed)
-        print("Added to crawled URLs set")
-
-
-
-
-
-
-
+    r.sismember(REDIS_CRAWLED_URLS_SET, "test_url")  # Test if Redis is reachable
+    logging.info("Redis is reachable")
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     size = comm.Get_size()
