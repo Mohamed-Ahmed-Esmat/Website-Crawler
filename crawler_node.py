@@ -8,6 +8,8 @@ from urllib.robotparser import RobotFileParser
 import socket
 import traceback
 from datetime import datetime
+import redis
+import hashlib
 
 # Configure logging
 hostname = socket.gethostname()
@@ -38,6 +40,9 @@ TAG_STATUS_UPDATE = 99
 TAG_HEARTBEAT = 98
 TAG_ERROR_REPORT = 999
 
+
+def hash_url(url):
+    return hashlib.sha256(url.encode()).hexdigest()
 
 def check_robots_txt(url):
     try:
@@ -236,6 +241,60 @@ def crawler_process():
     Process for a crawler node.
     Fetches web pages, extracts URLs, and sends results back to the master.
     """
+
+    r = redis.Redis(host='10.10.0.2', port=6379, decode_responses=True)
+
+    print("Redis connection established")
+    url = "http://example.com"
+    hashed = hash_url(url)
+    print("the url to be crawled is: ", url, " NOT added")
+    print("checking if the url is already crawled")
+    if r.sismember("crawled_urls", hashed):
+        print("Already crawled:", url)
+    else:
+        print("Not crawled")
+        r.sadd("crawled_urls", hashed)
+        print("Added to crawled URLs set")
+
+    url = "http://example.com"
+    hashed = hash_url(url)
+    print("the url to be crawled is: ", url, " added")
+    print("checking if the url is already crawled")
+    if r.sismember("crawled_urls", hashed):
+        print("Already crawled:", url)
+    else:
+        print("Not crawled")
+        r.sadd("crawled_urls", hashed)
+        print("Added to crawled URLs set")
+
+    url = "http://example2.com"
+    hashed = hash_url(url)
+    print("the url to be crawled is: ", url, " NOT added")
+    print("checking if the url is already crawled")
+    if r.sismember("crawled_urls", hashed):
+        print("Already crawled:", url)
+    else:
+        print("Not crawled")
+        r.sadd("crawled_urls", hashed)
+        print("Added to crawled URLs set")
+
+    url = "http://example2.com"
+    hashed = hash_url(url)
+    print("the url to be crawled is: ", url, " added")
+    print("checking if the url is already crawled")
+    if r.sismember("crawled_urls", hashed):
+        print("Already crawled:", url)
+    else:
+        print("Not crawled")
+        r.sadd("crawled_urls", hashed)
+        print("Added to crawled URLs set")
+
+
+
+
+
+
+
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     size = comm.Get_size()
