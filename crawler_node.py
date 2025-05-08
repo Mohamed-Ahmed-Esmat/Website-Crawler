@@ -10,6 +10,8 @@ import traceback
 from datetime import datetime
 import redis
 import hashlib
+import json
+from google.cloud import pubsub_v1
 
 # Configure logging
 hostname = socket.gethostname()
@@ -43,8 +45,17 @@ TAG_ERROR_REPORT = 999
 # Redis key for set of crawled URLs
 REDIS_CRAWLED_URLS_SET = "crawled_urls"
 
+# Google Cloud project and subscription details
+PROJECT_ID = "spheric-arcadia-457314-c8"  # Replace with your actual project ID
+SUBSCRIPTION_NAME = "crawl-tasks-sub"
+
 # Create Redis connection once as a global variable
 r = redis.Redis(host='10.10.0.2', port=6379, decode_responses=True, password='password123')
+
+# Initialize the MPI communicator
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+size = comm.Get_size()
 
 def hash_url(url):
     return hashlib.sha256(url.encode()).hexdigest()
@@ -61,9 +72,7 @@ def check_robots_txt(url):
         return rp.can_fetch("*", url)
     except Exception as e:
         logging.warning(f"Error checking robots.txt for {url}: {e}")
-        # If we can't check robots.txt, assume it's allowed
         return True
-
 
 def fetch_url(url):
     try:
@@ -74,34 +83,27 @@ def fetch_url(url):
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         
-        # Ensure we're using UTF-8 encoding to handle all Unicode characters
         response.encoding = 'utf-8'
         
         return True, response.text
     except requests.RequestException as e:
         return False, str(e)
 
-
 def extract_content(url, html_content):
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
         
-        # Extract all links and convert to absolute URLs
         links = []
         for a_tag in soup.find_all('a', href=True):
             href = a_tag['href']
             absolute_url = urljoin(url, href)
             
-            # Only include HTTP/HTTPS links
             if absolute_url.startswith(('http://', 'https://')):
                 links.append(absolute_url)
         
-        # Extract visible text
-        # Remove script and style elements that contain non-visible content
         for script in soup(["script", "style"]):
             script.extract()
             
-        # Get text content
         text = soup.get_text(separator=' ', strip=True)
         
         return links, text
@@ -109,23 +111,9 @@ def extract_content(url, html_content):
         logging.error(f"Error extracting content from {url}: {e}")
         return [], f"Error extracting content: {e}"
 
-
 def process_url_batch(urls_batch, max_depth, comm, rank, current_depth=1):
-    """
-    Process a batch of URLs and crawl to the specified depth
-    
-    Args:
-        urls_batch (list): List of URLs to crawl
-        max_depth (int): Maximum depth to crawl to
-        comm: MPI communicator
-        rank (int): Rank of this crawler node
-        current_depth (int): Current crawl depth (default: 1)
-        
-    Returns:
-        list: New URLs discovered that need further crawling
-    """
     all_new_urls = []
-    indexer_rank = 2  # First indexer node's rank
+    indexer_rank = 2
     
     total_urls = len(urls_batch)
     processed_urls = 0
@@ -135,12 +123,10 @@ def process_url_batch(urls_batch, max_depth, comm, rank, current_depth=1):
             processed_urls += 1
             logging.info(f"Crawler {rank} processing URL: {url} (depth {current_depth}/{max_depth}) - Progress: {processed_urls}/{total_urls}")
             
-            # Check if URL has already been crawled
             if r.sismember(REDIS_CRAWLED_URLS_SET, hash_url(url)):
                 logging.info(f"URL {url} has already been crawled. Skipping.")
                 continue
             
-            # Check robots.txt first
             if not check_robots_txt(url):
                 error_msg = f"Crawling disallowed by robots.txt for {url}"
                 logging.warning(error_msg)
@@ -155,7 +141,6 @@ def process_url_batch(urls_batch, max_depth, comm, rank, current_depth=1):
                 }, dest=0, tag=TAG_ERROR_REPORT)
                 continue
                 
-            # Fetch the web page content
             success, content = fetch_url(url)
             
             if not success:
@@ -172,15 +157,12 @@ def process_url_batch(urls_batch, max_depth, comm, rank, current_depth=1):
                 }, dest=0, tag=TAG_ERROR_REPORT)
                 continue
             
-            # Extract links and text from the page
             extracted_urls, extracted_text = extract_content(url, content)
             
             logging.info(f"Crawler {rank} crawled {url}, extracted {len(extracted_urls)} URLs (depth {current_depth}/{max_depth})")
             
-            # Implement crawl delay to be polite
-            time.sleep(1)  # 1 second delay between requests
+            time.sleep(1)
             
-            # Send the extracted content to an indexer node
             page_data = {
                 'url': url,
                 'content': extracted_text,
@@ -191,16 +173,13 @@ def process_url_batch(urls_batch, max_depth, comm, rank, current_depth=1):
             comm.send(page_data, dest=0, tag=TAG_PAGE_CONTENT)
             logging.info(f"Sent extracted content to indexer node {indexer_rank}")
             
-            # Add extracted URLs to the collection if we haven't reached max depth
             if current_depth < max_depth:
                 all_new_urls.extend(extracted_urls)
             
-            # Mark URL as crawled in Redis
             r.sadd(REDIS_CRAWLED_URLS_SET, hash_url(url))
                 
-            # Send status update with SUCCESS
             comm.send({
-                "status": STATUS_WORKING,  # Still WORKING until batch is complete
+                "status": STATUS_WORKING,
                 "url": url, 
                 "urls_found": len(extracted_urls),
                 "depth": current_depth,
@@ -227,41 +206,78 @@ def process_url_batch(urls_batch, max_depth, comm, rank, current_depth=1):
                 }
             }, dest=0, tag=TAG_ERROR_REPORT)
     
-    # Batch is complete, now set status to IDLE
     comm.send({
         "status": STATUS_IDLE,
         "message": f"Completed processing {total_urls} URLs at depth {current_depth}",
         "batch_complete": True
     }, dest=0, tag=TAG_STATUS_UPDATE)
     
-    # Send all discovered URLs back to master if we're not at max depth
     if current_depth < max_depth and all_new_urls:
-        # Process next depth level recursively
         if current_depth + 1 < max_depth:
-            # First send current urls to master
             comm.send({"urls": all_new_urls, "depth": current_depth + 1}, dest=0, tag=TAG_DISCOVERED_URLS)
-            # Then process the next level
             process_url_batch(all_new_urls, max_depth, comm, rank, current_depth + 1)
         else:
-            # Just send the urls to master and don't process further
             comm.send({"urls": all_new_urls, "depth": current_depth + 1}, dest=0, tag=TAG_DISCOVERED_URLS)
         
     return all_new_urls
 
+def pubsub_callback(message):
+    global comm, rank
+    
+    logging.info("Received a task message from Pub/Sub")
+    
+    try:
+        crawl_task = json.loads(message.data.decode("utf-8"))
+        logging.info(f"Processing crawl task: {crawl_task}")
+        
+        comm.send({
+            "status": STATUS_WORKING,
+            "message": "Received new task via Pub/Sub",
+            "timestamp": datetime.now().isoformat()
+        }, dest=0, tag=TAG_STATUS_UPDATE)
+        
+        if isinstance(crawl_task, dict):
+            urls_batch = crawl_task.get("urls", [])
+            max_depth = crawl_task.get("max_depth", 3)
+
+            if urls_batch and all(isinstance(url, str) for url in urls_batch):
+                logging.info(f"Crawler {rank} received batch of {len(urls_batch)} URLs with max depth {max_depth}")
+                process_url_batch(urls_batch, max_depth, comm, rank)
+            else:
+                logging.warning(f"Crawler {rank} received invalid URL batch: {urls_batch}")
+                
+        else:
+            url_to_crawl = crawl_task
+            logging.info(f"Crawler {rank} received single URL (legacy format): {url_to_crawl}")
+            process_url_batch([url_to_crawl], 3, comm, rank)
+        
+        message.ack()
+        
+        comm.send({
+            "status": STATUS_IDLE,
+            "message": "Finished processing URL batch from Pub/Sub, waiting for new tasks",
+            "timestamp": datetime.now().isoformat()
+        }, dest=0, tag=TAG_STATUS_UPDATE)
+        
+    except Exception as e:
+        error_msg = f"Crawler {rank} error processing Pub/Sub message: {e}"
+        stack_trace = traceback.format_exc()
+        logging.error(f"{error_msg}\n{stack_trace}")
+        
+        comm.send({
+            "status": STATUS_ERROR, 
+            "error": error_msg, 
+            "stack_trace": stack_trace,
+            "timestamp": datetime.now().isoformat()
+        }, dest=0, tag=TAG_ERROR_REPORT)
+        
+        message.nack()
 
 def crawler_process():
-    """
-    Process for a crawler node.
-    Fetches web pages, extracts URLs, and sends results back to the master.
-    """
-    
-    comm = MPI.COMM_WORLD
-    rank = comm.Get_rank()
-    size = comm.Get_size()
+    global comm, rank
     
     logging.info(f"Crawler node started with rank {rank} of {size}")
     
-    # Initial status report - start as IDLE
     comm.send({
         "status": STATUS_IDLE, 
         "message": "Crawler node initialized and ready",
@@ -269,82 +285,47 @@ def crawler_process():
     }, dest=0, tag=TAG_STATUS_UPDATE)
     
     last_heartbeat = time.time()
-    is_processing = False  # Flag to track if we're currently processing URLs
     
-    while True:
-        try:
+    subscriber = pubsub_v1.SubscriberClient()
+    subscription_path = subscriber.subscription_path(PROJECT_ID, SUBSCRIPTION_NAME)
+    
+    logging.info(f"Subscribing to Pub/Sub subscription: {SUBSCRIPTION_NAME}")
+    streaming_pull_future = subscriber.subscribe(subscription_path, callback=pubsub_callback)
+    logging.info(f"Listening for messages on {subscription_path}...")
+    
+    try:
+        while True:
             current_time = time.time()
             
-            # Simple heartbeat only when IDLE (no detailed status needed)
-            if not is_processing and current_time - last_heartbeat > 5:  # Send heartbeat every 5 seconds when idle
+            if current_time - last_heartbeat > 5:
                 comm.send({
                     "status": STATUS_IDLE,
                     "timestamp": datetime.now().isoformat()
-                }, dest=0, tag=TAG_HEARTBEAT)  # Using separate tag for simple heartbeat
+                }, dest=0, tag=TAG_HEARTBEAT)
                 last_heartbeat = current_time
-                logging.debug(f"Sent heartbeat to master (idle)")
-                
-            # Check for incoming task with non-blocking probe
-            if comm.iprobe(source=0, tag=TAG_TASK_ASSIGNMENT):
-                status = MPI.Status()
-                crawl_task = comm.recv(source=0, tag=TAG_TASK_ASSIGNMENT, status=status)
-                
-                # Check if it's a shutdown signal
-                if not crawl_task:
-                    logging.info(f"Crawler {rank} received shutdown signal. Exiting.")
-                    break
-                
-                # Set processing flag to true - we're now working
-                is_processing = True
-                    
-                # Check message format to handle different types of tasks
-                if isinstance(crawl_task, dict):
-                    urls_batch = crawl_task.get("urls", [])
-                    max_depth = crawl_task.get("max_depth", 3)
-
-                    # Ensure `urls_batch` contains only strings (actual URLs)
-                    if urls_batch and all(isinstance(url, str) for url in urls_batch):
-                        logging.info(f"Crawler {rank} received batch of {len(urls_batch)} URLs with max depth {max_depth}")
-
-                        # Process the URLs
-                        process_url_batch(urls_batch, max_depth, comm, rank)
-                    else:
-                        logging.warning(f"Crawler {rank} received invalid URL batch: {urls_batch}")
-                        
-                else:  # Backward compatibility for single URL
-                    url_to_crawl = crawl_task
-                    logging.info(f"Crawler {rank} received single URL (legacy format): {url_to_crawl}")
-                    process_url_batch([url_to_crawl], 3, comm, rank)  # Default to max depth 3
-                
-                # We've finished processing this batch - back to IDLE
-                is_processing = False
-                comm.send({
-                    "status": STATUS_IDLE,
-                    "message": "Finished processing URL batch, waiting for new tasks",
-                    "timestamp": datetime.now().isoformat()
-                }, dest=0, tag=TAG_STATUS_UPDATE)
-                
-                # Reset heartbeat timer after task completion
-                last_heartbeat = time.time()
+                logging.debug(f"Sent heartbeat to master")
             
-        except Exception as e:
-            error_msg = f"Crawler {rank} encountered unexpected error: {e}"
-            stack_trace = traceback.format_exc()
-            logging.error(f"{error_msg}\n{stack_trace}")
-            try:
-                comm.send({
-                    "status": STATUS_ERROR, 
-                    "error": error_msg, 
-                    "stack_trace": stack_trace,
-                    "timestamp": datetime.now().isoformat()
-                }, dest=0, tag=TAG_ERROR_REPORT)
-            except:
-                logging.critical("Failed to send error report to master")
+            time.sleep(0.1)
             
-            # Reset heartbeat timer and processing flag
-            last_heartbeat = time.time()
-            is_processing = False
-
+    except KeyboardInterrupt:
+        streaming_pull_future.cancel()
+        logging.info("Crawler stopped")
+    except Exception as e:
+        error_msg = f"Crawler {rank} encountered unexpected error: {e}"
+        stack_trace = traceback.format_exc()
+        logging.error(f"{error_msg}\n{stack_trace}")
+        
+        try:
+            comm.send({
+                "status": STATUS_ERROR, 
+                "error": error_msg, 
+                "stack_trace": stack_trace,
+                "timestamp": datetime.now().isoformat()
+            }, dest=0, tag=TAG_ERROR_REPORT)
+        except:
+            logging.critical("Failed to send error report to master")
+        
+        streaming_pull_future.cancel()
 
 if __name__ == '__main__':
     crawler_process()
