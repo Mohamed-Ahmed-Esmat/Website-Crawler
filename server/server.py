@@ -14,11 +14,10 @@ comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 size = comm.Get_size()
 
-# Add the parent directory to sys.path to import from parent directory
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 app = Flask(__name__, template_folder="../templates")
-CORS(app)  # Enable CORS for all routes
+CORS(app)  
 
 @app.route('/')
 def index():
@@ -34,16 +33,12 @@ def start_crawl():
         if not data:
             return jsonify({"error": "No data provided"}), 400
             
-        # Handle comma-separated URLs from frontend
         seed_urls_input = data.get('seed_urls', '')
         max_depth = data.get('max_depth', 3)
         
-        # Process seed_urls based on input type
         if isinstance(seed_urls_input, str):
-            # Split the comma-separated string and strip whitespace
             seed_urls = [url.strip() for url in seed_urls_input.split(',') if url.strip()]
         elif isinstance(seed_urls_input, list):
-            # If it's already a list, use it as is
             seed_urls = seed_urls_input
         else:
             seed_urls = []
@@ -123,5 +118,4 @@ def start_server():
     app.run(host='0.0.0.0', port=port, debug=debug)
 
 if __name__ == '__main__':
-    # Start the Flask server
     start_server()
