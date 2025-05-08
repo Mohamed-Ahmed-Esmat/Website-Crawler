@@ -35,6 +35,8 @@ def start_crawl():
             
         seed_urls_input = data.get('seed_urls', '')
         max_depth = data.get('max_depth', 3)
+
+        seed_urls_input = [0]
         
         if isinstance(seed_urls_input, str):
             seed_urls = [url.strip() for url in seed_urls_input.split(',') if url.strip()]
