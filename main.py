@@ -53,13 +53,13 @@ def main():
     #    logging.info(f"Process {rank} starting as Server")
     #    from server import start_server
     #    start_server()
-        
-    elif rank == size - 1:  # Last rank is the indexer
-        node_type = "Indexer"
-        logging.info(f"Process {rank} starting as Indexer node")
-        # Import indexer module and run indexer process
-        from indexer_main import indexer_node
-        indexer_node()
+    
+    #elif rank == size - 1:  # Last rank is the indexer
+    #    node_type = "Indexer"
+    #    logging.info(f"Process {rank} starting as Indexer node")
+    #    # Import indexer module and run indexer process
+    #    from indexer_main import indexer_node
+    #    indexer_node()
         
     else:  # Other ranks are crawlers
         node_type = "Crawler"

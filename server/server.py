@@ -34,11 +34,24 @@ def start_crawl():
         if not data:
             return jsonify({"error": "No data provided"}), 400
             
-        seed_urls = data.get('seed_urls', [])
+        # Handle comma-separated URLs from frontend
+        seed_urls_input = data.get('seed_urls', '')
         max_depth = data.get('max_depth', 3)
         
-        if not seed_urls or not isinstance(seed_urls, list):
-            return jsonify({"error": "Invalid or empty seed_urls. Must be a list of URLs."}), 400
+        # Process seed_urls based on input type
+        if isinstance(seed_urls_input, str):
+            # Split the comma-separated string and strip whitespace
+            seed_urls = [url.strip() for url in seed_urls_input.split(',') if url.strip()]
+        elif isinstance(seed_urls_input, list):
+            # If it's already a list, use it as is
+            seed_urls = seed_urls_input
+        else:
+            seed_urls = []
+
+        print(f"Received seed URLs: {seed_urls}")
+        
+        if not seed_urls:
+            return jsonify({"error": "Invalid or empty seed_urls. Must be a comma-separated string of URLs or a list."}), 400
             
         if not isinstance(max_depth, int) or max_depth <= 0:
             return jsonify({"error": "Invalid max_depth. Must be a positive integer."}), 400
