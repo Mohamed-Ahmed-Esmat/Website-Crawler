@@ -36,8 +36,9 @@ def start_crawl():
         seed_urls_input = data.get('seed_urls', '')
         max_depth = data.get('max_depth', 3)
 
-        seed_urls_input = [0]
-        
+        if isinstance(seed_urls_input, list) and len(seed_urls_input) > 0:
+            seed_urls_input = seed_urls_input[0]
+
         if isinstance(seed_urls_input, str):
             seed_urls = [url.strip() for url in seed_urls_input.split(',') if url.strip()]
         elif isinstance(seed_urls_input, list):
@@ -45,7 +46,6 @@ def start_crawl():
         else:
             seed_urls = []
 
-        print(f"Received seed URLs: {seed_urls}")
         
         if not seed_urls:
             return jsonify({"error": "Invalid or empty seed_urls. Must be a comma-separated string of URLs or a list."}), 400
