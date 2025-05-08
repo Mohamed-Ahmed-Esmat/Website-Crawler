@@ -58,7 +58,7 @@ def main():
         node_type = "Indexer"
         logging.info(f"Process {rank} starting as Indexer node")
         # Import indexer module and run indexer process
-        from indexer_node import indexer_node
+        from indexer_main import indexer_node
         indexer_node()
         
     else:  # Other ranks are crawlers
