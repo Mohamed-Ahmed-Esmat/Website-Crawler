@@ -48,11 +48,11 @@ def main():
         from master_node import master_process
         master_process()
 
-    elif rank == 1:  # server node
-        node_type = "Server"
-        logging.info(f"Process {rank} starting as Server")
-        from server import start_server
-        start_server()
+    #elif rank == 1:  # server node
+    #    node_type = "Server"
+    #    logging.info(f"Process {rank} starting as Server")
+    #    from server import start_server
+    #    start_server()
         
     elif rank == size - 1:  # Last rank is the indexer
         node_type = "Indexer"
