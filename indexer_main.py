@@ -2,8 +2,14 @@ from mpi4py import MPI
 import logging
 import socket
 import os
+import subprocess
+import pysolr
+from google.cloud import storage
 from Indexer_States import IndexerStates
 from utils import load_checkpoint, delete_checkpoint
+
+SOLR_URL = "http://10.10.0.43:8983/solr/"
+
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
@@ -23,6 +29,32 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
+
+def restore_from_gcs(bucket_name, gcs_file_path):
+    """
+    Downloads a BSON file from GCS and restores it into MongoDB.
+    """
+    logging.info(f"🧩 Restoring MongoDB from GCS file: gs://{bucket_name}/{gcs_file_path}")
+    try:
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(gcs_file_path)
+
+        local_file = f"/tmp/{os.path.basename(gcs_file_path)}"
+        blob.download_to_filename(local_file)
+
+        # Infer db name
+        if "search_database" in gcs_file_path:
+            db_name = "search_database"
+        elif "indexer" in gcs_file_path:
+            db_name = "indexer"
+        else:
+            db_name = "default"
+
+        subprocess.run(["mongorestore", "--db", db_name, "--drop", local_file], check=True)
+        logging.info(f"✅ MongoDB database '{db_name}' restored successfully.")
+    except Exception as e:
+        logging.error(f"❌ Restore failed: {e}")
 
 def indexer_node():
     logging.info(f"Indexer node started with rank {rank} of {size}")
@@ -54,5 +86,5 @@ def indexer_node():
             break
         progress_point = None
 
-if __name__ == "__main__":
+if __name__ == "_main_":
     indexer_node()
