@@ -3,7 +3,10 @@ import time
 import logging 
 import socket
 # Import necessary libraries for task queue, database, etc. (e.g., redis, cloud storage SDKs) 
- 
+from google.cloud import pubsub_v1
+import json
+
+
 # Configure logging 
 hostname = socket.gethostname()
 try:
@@ -23,6 +26,12 @@ logging.basicConfig(
 TAG_START_CRAWLING = 10
 TAG_SEARCH = 11
 TAG_NODES_STATUS = 12
+
+project_id = "spheric-arcadia-457314-c8"
+topic_id = "crawl-tasks"
+
+publisher = pubsub_v1.PublisherClient()
+topic_path = publisher.topic_path(project_id, topic_id)
 
 def handle_server_requests(comm, status):
     """Handle requests from the server node."""
