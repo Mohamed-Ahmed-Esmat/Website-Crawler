@@ -49,6 +49,13 @@ REDIS_CRAWLED_URLS_SET = "crawled_urls"
 PROJECT_ID = "spheric-arcadia-457314-c8"  # Replace with your actual project ID
 SUBSCRIPTION_NAME = "crawl-tasks-sub"
 
+# Add these constants at the top with your other constants
+CONTENT_TOPIC_NAME = "crawler-indexer"
+
+# Initialize the publisher in the crawler_process function (or at module level)
+publisher = pubsub_v1.PublisherClient()
+content_topic_path = publisher.topic_path(PROJECT_ID, CONTENT_TOPIC_NAME)
+
 # Create Redis connection once as a global variable
 r = redis.Redis(host='10.10.0.2', port=6379, decode_responses=True, password='password123')
 
@@ -164,8 +171,10 @@ def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=
                 'depth': current_depth,
                 'timestamp': datetime.now().isoformat()
             }
-            #comm.send(page_data, dest=2, tag=TAG_PAGE_CONTENT)
-            #logging.info(f"Sent extracted content to indexer node {indexer_rank}")
+            page_data_json = json.dumps(page_data).encode('utf-8')
+            future = publisher.publish(content_topic_path, page_data_json)
+            message_id = future.result()
+            logging.info(f"Published extracted content for {url} to Pub/Sub topic '{CONTENT_TOPIC_NAME}', message ID: {message_id}")
             
             if current_depth <= max_depth:
                 all_new_urls.extend(extracted_urls)
