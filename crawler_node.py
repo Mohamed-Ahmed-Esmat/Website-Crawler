@@ -167,7 +167,7 @@ def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=
             #comm.send(page_data, dest=2, tag=TAG_PAGE_CONTENT)
             #logging.info(f"Sent extracted content to indexer node {indexer_rank}")
             
-            if current_depth < max_depth:
+            if current_depth <= max_depth:
                 all_new_urls.extend(extracted_urls)
             
             r.sadd(REDIS_CRAWLED_URLS_SET, hash_url(url))
