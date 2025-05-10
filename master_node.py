@@ -123,8 +123,8 @@ def master_process():
                 if message_tag == 1: # Crawler completed task and sent back extracted URLs 
                     crawler_tasks_assigned -= 1 
                     new_urls = message_data['urls'] # Assuming message_data is a list of URLs 
-                    #if new_urls: 
-                        #urls_to_crawl_queue.extend(new_urls) # Add newly discovered URLs to the queue 
+                    if new_urls: 
+                        urls_to_crawl_queue.extend(new_urls) # Add newly discovered URLs to the queue 
                     logging.info(f"Master received URLs from Crawler {message_source}, URLs in queue: {len(urls_to_crawl_queue)}, Tasks assigned: {crawler_tasks_assigned}") 
                 elif message_tag == 99: # Crawler node reports status/heartbeat 
                     logging.info(f"Crawler {message_source} status: {message_data}") # Example status message 
