@@ -220,6 +220,7 @@ def pubsub_callback(message):
 
     session = requests.Session()
     session.headers.update({'User-Agent': 'DistributedWebCrawler/1.0'})
+    r.delete(REDIS_CRAWLED_URLS_SET)
     
     logging.info("Received a task message from Pub/Sub")
     
