@@ -22,7 +22,7 @@ class IndexerStates:
 
     @staticmethod
     def idle_state(comm):
-        #logging.info("State: IDLE - Waiting for new task...")
+        logging.info("State: IDLE - Waiting for new task...")
         current_time = time.time()
         if current_time - IndexerStates.last_heartbeat >= 10:
             logging.info("[IDLE] Heartbeat: Indexer is alive and waiting for tasks.")
