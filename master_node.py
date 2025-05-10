@@ -20,6 +20,51 @@ logging.basicConfig(
     ]
 )
 
+TAG_START_CRAWLING = 10
+TAG_SEARCH = 11
+TAG_NODES_STATUS = 12
+
+def handle_server_requests(comm, status):
+    """Handle requests from the server node."""
+    if comm.iprobe(source=1, tag=MPI.ANY_TAG, status=status):
+        tag = status.Get_tag()
+        if tag == TAG_START_CRAWLING:
+            # Handle start crawling request
+            data = comm.recv(source=1, tag=TAG_START_CRAWLING)
+            seed_urls = data.get("seed_urls", [])
+            max_depth = data.get("max_depth", 3)
+            logging.info(f"Received start crawling request: seed_urls={seed_urls}, max_depth={max_depth}")
+
+            # TODO: Implement actual crawling logic here
+            # Simulate crawling and return a list of URLs
+            resulted_urls = [f"{url}/page1" for url in seed_urls]  # Example result
+            comm.send(resulted_urls, dest=1, tag=TAG_START_CRAWLING)
+
+        elif tag == TAG_SEARCH:
+            # Handle search request
+            data = comm.recv(source=1, tag=TAG_SEARCH)
+            query = data.get("query", "")
+            search_type = data.get("search_type", "keyword")
+            logging.info(f"Received search request: query={query}, search_type={search_type}")
+
+            # TODO: Implement actual search logic here
+            # Simulate search and return a list of URLs
+            resulted_urls = [f"http://example.com/{query}/result1", f"http://example.com/{query}/result2"]
+            comm.send(resulted_urls, dest=1, tag=TAG_SEARCH)
+
+        elif tag == TAG_NODES_STATUS:
+            # Handle nodes status request
+            comm.recv(source=1, tag=TAG_NODES_STATUS)  # Receive None
+            logging.info("Received nodes status request")
+
+            # TODO: Implement logic to dynamically fetch nodes status from the system
+            # Simulate nodes status and return a list of dicts
+            nodes_status = [
+                {"type": "crawler", "ip_address": "10.10.0.2", "active": True},
+                {"type": "indexer", "ip_address": "10.10.0.3", "active": False}
+            ]
+            comm.send(nodes_status, dest=1, tag=TAG_NODES_STATUS)
+
 def master_process(): 
     """ 
     Main process for the master node. 
@@ -56,6 +101,9 @@ def master_process():
  
  
     while urls_to_crawl_queue or crawler_tasks_assigned > 0: # Continue as long as there are URLs to crawl or tasks in progress 
+        # Handle server requests
+        handle_server_requests(comm, status)
+
         # Check for completed crawler tasks and results from crawler nodes 
         if crawler_tasks_assigned > 0: 
             if comm.iprobe(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status): # Non-blocking check for incoming messages 
@@ -88,9 +136,14 @@ def master_process():
             task_id = task_count 
             task_count += 1 
             task_metadata = {"urls": [url_to_crawl], "max_depth": 3}  # Example metadata
-            comm.send(task_metadata, dest=available_crawler_rank, tag=0) # Send task with metadata
+            # comm.send(task_metadata, dest=available_crawler_rank, tag=0) # Send task with metadata (MPI version, now commented out)
+            # --- Pub/Sub version ---
+            message_json = json.dumps(task_metadata)
+            message_bytes = message_json.encode("utf-8")
+            future = publisher.publish(topic_path, message_bytes)
+            logging.info(f"Published crawl task to Pub/Sub: {task_metadata}, message ID: {future.result()}")
             crawler_tasks_assigned += 1 
-            logging.info(f"Master assigned task {task_id} (crawl {url_to_crawl}) to Crawler {available_crawler_rank}, Tasks assigned: {crawler_tasks_assigned}") 
+            logging.info(f"Master assigned task {task_id} (crawl {url_to_crawl}) to Pub/Sub topic 'crawl-tasks', Tasks assigned: {crawler_tasks_assigned}") 
             time.sleep(0.1) # Small delay to prevent overwhelming master in this example 
         time.sleep(1) # Master node's main loop sleep - adjust as needed 
     logging.info("Master node finished URL distribution. Waiting for crawlers to complete...") 
