@@ -220,10 +220,13 @@ def pubsub_callback(message):
 
     session = requests.Session()
     session.headers.update({'User-Agent': 'DistributedWebCrawler/1.0'})
-    r.delete(REDIS_CRAWLED_URLS_SET)
     
     logging.info("Received a task message from Pub/Sub")
     
+    logging.info(f"before deleting crawled URLs set: {r.smembers(REDIS_CRAWLED_URLS_SET).count()} URLs") #to be removed
+    r.delete(REDIS_CRAWLED_URLS_SET)
+    logging.info(f"after deleting crawled URLs set: {r.smembers(REDIS_CRAWLED_URLS_SET).count()} URLs") #to be removed
+
     try:
         crawl_task = json.loads(message.data.decode("utf-8"))
         logging.info(f"Processing crawl task: {crawl_task}")
