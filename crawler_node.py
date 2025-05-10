@@ -74,17 +74,11 @@ def check_robots_txt(url):
         logging.warning(f"Error checking robots.txt for {url}: {e}")
         return True
 
-def fetch_url(url):
+def fetch_url(url, session):
     try:
-        headers = {
-            'User-Agent': 'DistributedWebCrawler/1.0',
-        }
-        
-        response = requests.get(url, headers=headers, timeout=10)
+        response = session.get(url, timeout=10)
         response.raise_for_status()
-        
         response.encoding = 'utf-8'
-        
         return True, response.text
     except requests.RequestException as e:
         return False, str(e)
@@ -111,7 +105,7 @@ def extract_content(url, html_content):
         logging.error(f"Error extracting content from {url}: {e}")
         return [], f"Error extracting content: {e}"
 
-def process_url_batch(urls_batch, max_depth, comm, rank, current_depth=1):
+def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=1):
     all_new_urls = []
     indexer_rank = 2
     
@@ -141,7 +135,7 @@ def process_url_batch(urls_batch, max_depth, comm, rank, current_depth=1):
                 }, dest=0, tag=TAG_ERROR_REPORT)
                 continue
                 
-            success, content = fetch_url(url)
+            success, content = fetch_url(url, session)
             
             if not success:
                 error_msg = f"Failed to fetch {url}: {content}"
@@ -215,7 +209,7 @@ def process_url_batch(urls_batch, max_depth, comm, rank, current_depth=1):
     if current_depth < max_depth and all_new_urls:
         if current_depth + 1 < max_depth:
             comm.send({"urls": all_new_urls, "depth": current_depth + 1}, dest=0, tag=TAG_DISCOVERED_URLS)
-            process_url_batch(all_new_urls, max_depth, comm, rank, current_depth + 1)
+            process_url_batch(all_new_urls, max_depth, comm, rank, session, current_depth + 1)
         else:
             comm.send({"urls": all_new_urls, "depth": current_depth + 1}, dest=0, tag=TAG_DISCOVERED_URLS)
         
@@ -223,6 +217,9 @@ def process_url_batch(urls_batch, max_depth, comm, rank, current_depth=1):
 
 def pubsub_callback(message):
     global comm, rank
+
+    session = requests.Session()
+    session.headers.update({'User-Agent': 'DistributedWebCrawler/1.0'})
     
     logging.info("Received a task message from Pub/Sub")
     
@@ -242,14 +239,14 @@ def pubsub_callback(message):
 
             if urls_batch and all(isinstance(url, str) for url in urls_batch):
                 logging.info(f"Crawler {rank} received batch of {len(urls_batch)} URLs with max depth {max_depth}")
-                process_url_batch(urls_batch, max_depth, comm, rank)
+                process_url_batch(urls_batch, max_depth, comm, rank, session)
             else:
                 logging.warning(f"Crawler {rank} received invalid URL batch: {urls_batch}")
                 
         else:
             url_to_crawl = crawl_task
             logging.info(f"Crawler {rank} received single URL (legacy format): {url_to_crawl}")
-            process_url_batch([url_to_crawl], 3, comm, rank)
+            process_url_batch([url_to_crawl], 3, comm, rank, session)
         
         message.ack()
         
