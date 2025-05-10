@@ -216,7 +216,7 @@ def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=
     return all_new_urls
 
 def pubsub_callback(message):
-    global comm, rank
+    global comm, rank, r
 
     session = requests.Session()
     session.headers.update({'User-Agent': 'DistributedWebCrawler/1.0'})
