@@ -218,6 +218,8 @@ def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=
 def pubsub_callback(message):
     global comm, rank, r
 
+    message.ack()
+
     session = requests.Session()
     session.headers.update({'User-Agent': 'DistributedWebCrawler/1.0'})
     
@@ -249,8 +251,6 @@ def pubsub_callback(message):
             url_to_crawl = crawl_task
             logging.info(f"Crawler {rank} received single URL (legacy format): {url_to_crawl}")
             process_url_batch([url_to_crawl], 3, comm, rank, session)
-        
-        message.ack()
         
         comm.send({
             "status": STATUS_IDLE,
@@ -288,8 +288,10 @@ def crawler_process():
     subscriber = pubsub_v1.SubscriberClient()
     subscription_path = subscriber.subscription_path(PROJECT_ID, SUBSCRIPTION_NAME)
     
+    flow_control = pubsub_v1.types.FlowControl(max_messages=1)
+    
     logging.info(f"Subscribing to Pub/Sub subscription: {SUBSCRIPTION_NAME}")
-    streaming_pull_future = subscriber.subscribe(subscription_path, callback=pubsub_callback)
+    streaming_pull_future = subscriber.subscribe(subscription_path, callback=pubsub_callback, flow_control=flow_control)
     logging.info(f"Listening for messages on {subscription_path}...")
     
     try:
