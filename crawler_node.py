@@ -117,9 +117,9 @@ def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=
             processed_urls += 1
             logging.info(f"Crawler {rank} processing URL: {url} (depth {current_depth}/{max_depth}) - Progress: {processed_urls}/{total_urls}")
             
-            if r.sismember(REDIS_CRAWLED_URLS_SET, hash_url(url)):
-                logging.info(f"URL {url} has already been crawled. Skipping.")
-                continue
+            #if r.sismember(REDIS_CRAWLED_URLS_SET, hash_url(url)):
+                #logging.info(f"URL {url} has already been crawled. Skipping.")
+                #continue
             
             if not check_robots_txt(url):
                 error_msg = f"Crawling disallowed by robots.txt for {url}"
@@ -223,11 +223,7 @@ def pubsub_callback(message):
     
     logging.info("Received a task message from Pub/Sub")
     
-    crawled_hashes = r.smembers(REDIS_CRAWLED_URLS_SET) #to be removed
-    logging.info(f"before deleting crawled URLs set: {len(crawled_hashes)} URLs") #to be removed
-    r.delete(REDIS_CRAWLED_URLS_SET)
-    crawled_hashes = r.smembers(REDIS_CRAWLED_URLS_SET) #to be removed
-    logging.info(f"after deleting crawled URLs set: {len(crawled_hashes)} URLs") #to be removed
+    #r.delete(REDIS_CRAWLED_URLS_SET)
 
     try:
         crawl_task = json.loads(message.data.decode("utf-8"))
