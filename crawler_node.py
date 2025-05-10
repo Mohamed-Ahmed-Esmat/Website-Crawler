@@ -223,10 +223,10 @@ def pubsub_callback(message):
     
     logging.info("Received a task message from Pub/Sub")
     
-    crawled_hashes = r.smembers(REDIS_CRAWLED_URLS_SET).count() #to be removed
+    crawled_hashes = r.smembers(REDIS_CRAWLED_URLS_SET) #to be removed
     logging.info(f"before deleting crawled URLs set: {len(crawled_hashes)} URLs") #to be removed
     r.delete(REDIS_CRAWLED_URLS_SET)
-    crawled_hashes = r.smembers(REDIS_CRAWLED_URLS_SET).count() #to be removed
+    crawled_hashes = r.smembers(REDIS_CRAWLED_URLS_SET) #to be removed
     logging.info(f"after deleting crawled URLs set: {len(crawled_hashes)} URLs") #to be removed
 
     try:
