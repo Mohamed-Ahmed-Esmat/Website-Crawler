@@ -91,7 +91,7 @@ def handle_message(msg):
                     state, data = IndexerStates.indexing_state(data, progress_point)
                 elif state == "Ready_For_Querying":
                     #state, data = IndexerStates.ready_for_querying_state(comm)
-                    continue
+                    state = "EXIT"
                 elif state == "EXIT":
                     break
                 progress_point = None
