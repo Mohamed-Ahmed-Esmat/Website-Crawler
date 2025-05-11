@@ -100,11 +100,14 @@ def handle_message(msg):
 def indexer_node():
     logging.info(f"Indexer node started with size of {size}")
 
-    subscriber = pubsub_v1.SubscriberClient()
-    topic_path = subscriber.topic_path(PROJECT_ID, "crawler-indexer")
-    subscription_path = subscriber.subscription_path(PROJECT_ID, SUBSCRIPTION_NAME)
-    subscriber.delete_subscription(subscription=subscription_path)
-    logging.info(f"❌ Deleted old subscription: {SUBSCRIPTION_NAME}")
+    try:
+        subscriber = pubsub_v1.SubscriberClient()
+        topic_path = subscriber.topic_path(PROJECT_ID, "crawler-indexer")
+        subscription_path = subscriber.subscription_path(PROJECT_ID, SUBSCRIPTION_NAME)
+        subscriber.delete_subscription(subscription=subscription_path)
+        logging.info(f"❌ Deleted old subscription: {SUBSCRIPTION_NAME}")
+    except Exception as e:
+        logging.error(f"❌ Failed to delete subscription: {e}")
     
     subscriber = pubsub_v1.SubscriberClient()
     subscription_path = subscriber.subscription_path(PROJECT_ID, SUBSCRIPTION_NAME)
