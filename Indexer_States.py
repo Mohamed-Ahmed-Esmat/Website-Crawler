@@ -9,9 +9,16 @@ from search_utils import IndexerSearch
 from utils import hash_url, store_indexed_page
 from history_utils import store_search_query, get_search_history
 from utils import backup_mongodb_and_upload
+import socket
 
+# Added: Get IP for heartbeat
+hostname_indexer = socket.gethostname()
+try:
+    ip_address_indexer = socket.gethostbyname(hostname_indexer)
+except socket.gaierror:
+    ip_address_indexer = "unknown-ip-indexer"
 
-
+TAG_INDEXER_HEARTBEAT = 97 # Added: New tag for indexer heartbeat
 
 class IndexerStates:
     last_heartbeat = time.time()
@@ -21,7 +28,17 @@ class IndexerStates:
         logging.info("State: IDLE - Waiting for new task...")
         current_time = time.time()
         if current_time - IndexerStates.last_heartbeat >= 10:
-            logging.info("[IDLE] Heartbeat: Indexer is alive and waiting for tasks.")
+            # logging.info("[IDLE] Heartbeat: Indexer is alive and waiting for tasks.") # Replaced by new MPI heartbeat to master
+            
+            rank_indexer = comm.Get_rank() # Get rank within the method
+            heartbeat_data = {
+                "node_type": "indexer",
+                "rank": rank_indexer,
+                "ip_address": ip_address_indexer,
+                "timestamp": time.time()
+            }
+            comm.send(heartbeat_data, dest=0, tag=TAG_INDEXER_HEARTBEAT)
+            logging.info(f"[IDLE] Sent Heartbeat to Master: {heartbeat_data}")
             IndexerStates.last_heartbeat = current_time
 
         if comm.iprobe(source=MPI.ANY_SOURCE, tag=2):

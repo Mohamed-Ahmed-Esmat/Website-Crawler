@@ -27,6 +27,7 @@ TAG_START_CRAWLING = 10
 TAG_SEARCH = 11
 TAG_NODES_STATUS = 12
 TAG_SHUTDOWN_MASTER = 13 # New tag for graceful shutdown
+TAG_INDEXER_HEARTBEAT = 97 # Added: For Indexer Heartbeats
 
 project_id = "spheric-arcadia-457314-c8"
 topic_id = "crawl-tasks"
@@ -210,7 +211,14 @@ def master_process():
                                 logging.error(f"Master Job: Crawler {message_source} reported error: {message_data}")
                                 #job_crawler_tasks_assigned -= 1 # Decrement task count
                             elif message_tag == 98:  # Heartbeat from a crawler
-                                logging.info(f"Master Job: Heartbeat received from Crawler {message_source}: {message_data}")
+                                # logging.info(f"Master Job: Heartbeat received from Crawler {message_source}: {message_data}") # Old logging
+                                node_ip = message_data.get("ip_address", "N/A")
+                                node_rank = message_data.get("rank", "N/A")
+                                logging.info(f"Master: Received Heartbeat from CRAWLER. Rank: {node_rank}, IP: {node_ip}, Data: {message_data}")
+                            elif message_tag == TAG_INDEXER_HEARTBEAT: # Added: Handle Indexer Heartbeat
+                                node_ip = message_data.get("ip_address", "N/A")
+                                node_rank = message_data.get("rank", "N/A")
+                                logging.info(f"Master: Received Heartbeat from INDEXER. Rank: {node_rank}, IP: {node_ip}, Data: {message_data}")
                             elif message_tag == 2:  # Page content from crawler
                                 logging.info(f"Master Job: Page content received from Crawler {message_source}. Forwarding to an indexer...")
                                 if active_indexer_node_ranks:
