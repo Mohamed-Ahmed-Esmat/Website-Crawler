@@ -104,7 +104,7 @@ def get_recent_queries(user_id, limit=8):
 
 def log_solr_stats():
     try:
-        res = requests.get("http://localhost:8983/solr/admin/cores?wt=json")
+        res = requests.get("http://10.10.0.43:8983/solr/admin/cores?wt=json")
         if res.ok:
             stats = res.json()
             logging.info(f"📊 Solr Core Stats: {stats}")
