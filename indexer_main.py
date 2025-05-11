@@ -80,7 +80,6 @@ def handle_message(msg):
             progress_point = None
 
             while True:
-                logging.info(f"🌀 Transitioning to state: {state}")
                 if state == "IDLE":
                     state, data = IndexerStates.idle_state(comm)
                 elif state == "Receiving_Data":
