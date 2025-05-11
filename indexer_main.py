@@ -80,6 +80,7 @@ def handle_message(msg):
             progress_point = None
 
             while True:
+                logging.info(f"🌀 Transitioning to state: {state}")
                 if state == "IDLE":
                     state, data = IndexerStates.idle_state(comm)
                 elif state == "Receiving_Data":
@@ -129,4 +130,10 @@ def indexer_node():
         time.sleep(0.2)
 
 if __name__ == "__main__":
+
+    # Restore MongoDB backups
+    restore_from_gcs("bucket-dist", "mongobackup/search_database")
+    restore_from_gcs("bucket-dist", "mongobackup/indexer")
+
+    
     indexer_node()

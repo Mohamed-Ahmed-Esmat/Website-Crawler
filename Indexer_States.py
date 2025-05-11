@@ -8,6 +8,8 @@ import pysolr
 from search_utils import IndexerSearch
 from utils import hash_url, store_indexed_page
 from history_utils import store_search_query, get_search_history
+from utils import backup_mongodb_and_upload
+
 
 
 
@@ -127,6 +129,9 @@ class IndexerStates:
             
             # Save page record
             store_indexed_page(url, content_str)
+
+            #Backup MongoDB
+            backup_mongodb_and_upload()
 
             logging.info(f"✔️ Indexing complete for URL: {url}.")
 

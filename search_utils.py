@@ -1,10 +1,12 @@
 import logging
 import pysolr
 import requests
+import os
 from pymongo import MongoClient
 from datetime import datetime
+from utils import upload_search_history_to_gcs
 
-solr = pysolr.Solr('http://10.10.0.43:8983/solr/indexer_core', always_commit=False)
+solr = pysolr.Solr('http://localhost:8983/solr/indexer_core', always_commit=False)
 
 class IndexerSearch:
     @staticmethod
@@ -79,7 +81,9 @@ client = MongoClient("mongodb://localhost:27017/")
 db = client["search_database"]
 search_collection = db["search_history"]
 
-def store_search_query(query, user_id):
+
+
+def store_search_query(query, user_id="default_user"):
     try:
         timestamp = datetime.utcnow()
         search_data = {
@@ -89,8 +93,37 @@ def store_search_query(query, user_id):
         }
         search_collection.insert_one(search_data)
         print(f"Search query '{query}' stored for user '{user_id}' at {timestamp}.")
+
+        # Upload updated history to GCS
+        upload_search_history_to_gcs()
+
     except Exception as e:
         print(f"Error storing search query: {e}")
+
+
+def upload_search_history_to_gcs():
+    try:
+        client = MongoClient("mongodb://localhost:27017/")
+        history = list(client["search_database"]["search_history"].find({}))
+
+        os.makedirs("/tmp/search_backup", exist_ok=True)
+        backup_path = "/tmp/search_backup/search_history.json"
+
+        with open(backup_path, "w") as f:
+            import json
+            json.dump(history, f, default=str)
+
+        storage_client = storage.Client()
+        bucket = storage_client.bucket("bucket-dist")
+        blob = bucket.blob("search_backups/search_history.json")
+        blob.upload_from_filename(backup_path)
+
+        logging.info("📤 Uploaded search history to GCS.")
+
+    except Exception as e:
+        logging.error(f"❌ Failed to upload search history: {e}")
+
+
 
 def get_recent_queries(user_id, limit=8):
     try:
@@ -104,7 +137,7 @@ def get_recent_queries(user_id, limit=8):
 
 def log_solr_stats():
     try:
-        res = requests.get("http://10.10.0.43:8983/solr/admin/cores?wt=json")
+        res = requests.get("http://localhost:8983/solr/admin/cores?wt=json")
         if res.ok:
             stats = res.json()
             logging.info(f"📊 Solr Core Stats: {stats}")
