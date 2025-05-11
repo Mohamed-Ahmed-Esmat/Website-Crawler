@@ -142,7 +142,7 @@ def indexer_node():
         subscriber.create_subscription(name=subscription_path, topic=topic_path)
         logging.info(f"Created new Pub/Sub subscription: {SUBSCRIPTION_NAME} to topic {CONTENT_TOPIC_NAME}")
             
-        flow_control = pubsub_v1.types.FlowControl(max_messages=5) # Allow a few messages in buffer
+       # flow_control = pubsub_v1.types.FlowControl(max_messages=5) # Allow a few messages in buffer
         
         # Curry comm and shared_executor into the callback
         # The Pub/Sub callback will run in a thread managed by the subscriber client.
@@ -151,7 +151,7 @@ def indexer_node():
         # The FSM states, when processing that MPI message, will use `shared_executor`.
         wrapped_callback = lambda msg: handle_pubsub_message(msg, comm, shared_executor)
 
-        streaming_pull_future = subscriber.subscribe(subscription_path, callback=wrapped_callback, flow_control=flow_control)
+        streaming_pull_future = subscriber.subscribe(subscription_path, callback=wrapped_callback)
         logging.info(f"📥 Indexer subscribed to Pub/Sub topic: {CONTENT_TOPIC_NAME} via subscription {SUBSCRIPTION_NAME}")
         
     except Exception as e:
