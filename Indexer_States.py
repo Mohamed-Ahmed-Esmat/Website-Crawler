@@ -160,50 +160,19 @@ class IndexerStates:
             return "Recovery", {"original_state": "Indexing", "data": data}
 
     @staticmethod
-    def ready_for_querying_state(comm):
-        logging.info("State: READY_FOR_QUERYING - Accepting queries (smart search).")
+    def search(query, search_type="keyword"):
+        logging.info(f"State: SEARCHING - Executing {search_type} search for: '{query}'")
         try:
-            if not os.path.exists("simple_index.pkl"):
-                logging.error("Index file not found. Cannot perform queries.")
-                return "IDLE", None
+            if search_type == "keyword":
+                # Exact keyword search
+                result = IndexerSearch.search_stemmed_query(query)
 
-            with open("simple_index.pkl", "rb") as f:
-                index = pickle.load(f)
-
-            print("\n[Indexer] Ready for Queries! Type a keyword (supports prefix search) or 'exit' to stop.")
-
-            while True:
-                if comm.iprobe(source=MPI.ANY_SOURCE, tag=2):
-                    page_data = comm.recv(source=MPI.ANY_SOURCE, tag=2)
-                    if page_data:
-                        logging.info("New crawler data received! Switching to Receiving_Data...")
-                        return "Receiving_Data", page_data
-
-                query = input("Enter keyword (or 'exit' to stop): ").strip().lower()
-                if query == "exit":
-                    break
-                elif query:
-                    # Show recent history suggestions (pinky suggestions)
-                    recent_history = get_search_history(query)
-                    if recent_history:
-                        print("\n🩷 Previously searched:")
-                        for entry in recent_history:
-                            print(f"   🔁 {entry['query']} (last: {entry.get('last_searched')})")
-
-                    # Show autocomplete suggestions
-                    IndexerSearch.suggest_autocomplete_prefix(query)
-
-                    # Fuzzy search if no match found
-                    IndexerSearch.search_stemmed_query(query)
-
-                    # Trigger fuzzy search if no stemmed match
-                    IndexerSearch.fuzzy_query_search(query)
-
-                    # Store query in history
-                    store_search_query(query)
-
-            return "IDLE", None
+            if search_type == "fuzzy":
+                # Fuzzy search for typos/variations
+                result = IndexerSearch.fuzzy_query_search(query)
+            
+            return result
 
         except Exception as e:
-            logging.error(f"Error during querying: {e}")
-            return "Recovery", {"original_state": "Ready_For_Querying", "data": None}
+            logging.error(f"Error during search: {e}")
+            return False

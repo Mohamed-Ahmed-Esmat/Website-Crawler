@@ -89,9 +89,6 @@ def handle_message(msg):
                     state, data = IndexerStates.parsing_state(data, progress_point)
                 elif state == "Indexing":
                     state, data = IndexerStates.indexing_state(data, progress_point)
-                elif state == "Ready_For_Querying":
-                    #state, data = IndexerStates.ready_for_querying_state(comm)
-                    state = "EXIT"
                 elif state == "EXIT":
                     break
                 progress_point = None
@@ -142,17 +139,39 @@ def indexer_node():
         
         # Keep MPI listener alive to respond to master and also keep the subscription active
         while True:
-            if comm.iprobe(source=MPI.ANY_SOURCE, tag=2):
-                request = comm.recv(source=MPI.ANY_SOURCE, tag=2)
-                url = request.get("url")
-                client = MongoClient("mongodb://localhost:27017/")
-                page = client["search_database"]["indexed_pages"].find_one({"url": url})
-                if page:
-                    comm.send(page, dest=0, tag=2)
-                    logging.info(f"📦 Sent indexed content of {url} to master via MPI")
+            if comm.iprobe(source=0, tag=20):
+                search_request = comm.recv(source=0, tag=20)
+                logging.info(f"🔍 Received search request from master: {search_request}")
+
+                query = search_request.get("query", "")
+                search_type = search_request.get("search_type", "keyword")
+
+                if not query:
+                    logging.warning("❌ Received empty search query from master")
+                    comm.send([], dest=0, tag=21)  # TAG_INDEXER_SEARCH_RESULTS = 21
                 else:
-                    comm.send({"error": "not_found"}, dest=0, tag=2)
-                    logging.warning(f"❌ Requested content not found in DB: {url}")
+                    try:
+                        # Use the IndexerStates.search method to perform the search
+                        search_results = IndexerStates.search(query, search_type)
+                        print(f"Search results: {search_results}")
+
+                        # Extract URLs from the Solr results
+                        #urls = []
+                        #if search_results:
+                        #    for result in search_results:
+                        #        url = result.get("id")
+                        #        if url:
+                        #            urls.append(url)
+
+                        #logging.info(f"🔍 Search for '{query}' ({search_type}) found {len(urls)} results")
+
+                        # Send results back to master
+                        #comm.send(urls, dest=0, tag=21)
+
+                    except Exception as e:
+                        logging.error(f"❌ Error processing search request: {e}")
+                        comm.send([], dest=0, tag=21)  # Send empty results on error
+
             time.sleep(0.2)
             
     except Exception as e:

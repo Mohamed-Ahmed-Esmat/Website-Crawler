@@ -68,11 +68,7 @@ class IndexerSearch:
     def search_stemmed_query(query_text: str):
         try:
             results = solr.search(f"content_stemmed:{query_text}")
-            print(f"\n🔎 Found {len(results)} match(es) for query '{query_text}':")
-            for result in results:
-                doc_id = result.get("id", "No ID")
-                snippet = result.get("content_stemmed", "")[:100]
-                print(f"🔹 {doc_id} → Snippet: {snippet}...")
+            return results
         except Exception as e:
             logging.error(f"⚠️ Error in search_stemmed_query: {e}")
             print("Solr query failed.")
@@ -103,14 +99,7 @@ class IndexerSearch:
         try:
             fuzzy_query = f"{query}~"
             results = solr.search(f"content_stemmed:{fuzzy_query}")
-            if results:
-                print(f"\n🔎 Found {len(results)} fuzzy matches for query '{query}':")
-                for result in results:
-                    doc_id = result.get("id", "No ID")
-                    snippet = result.get("content_stemmed", "")[:100]
-                    print(f"🔹 {doc_id} → Snippet: {snippet}...")
-            else:
-                print(f"❌ No fuzzy matches found for '{query}'.")
+            return results
         except Exception as e:
             logging.error(f"Fuzzy search error: {e}")
             print("⚠️ Fuzzy search failed.")
