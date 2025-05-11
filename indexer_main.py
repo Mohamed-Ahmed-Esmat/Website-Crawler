@@ -243,10 +243,11 @@ def indexer_node():
                 last_heartbeat_time = current_time
                 logging.debug("📈 Sent heartbeat to master")
             
-            # Check for MPI messages
-            if comm.iprobe(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=MPI.Status()):
-                tag = MPI.Status().Get_tag()
-                source = MPI.Status().Get_source()
+            # Check for MPI messages - FIXED: properly use status object
+            status = MPI.Status()
+            if comm.iprobe(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status):
+                tag = status.Get_tag()
+                source = status.Get_source()
                 
                 if tag == 2:  # Content request
                     request = comm.recv(source=source, tag=2)
@@ -261,9 +262,22 @@ def indexer_node():
                             comm.send({"error": "not_found"}, dest=source, tag=2)
                             logging.warning(f"❌ Requested content not found in DB: {url}")
                 elif tag == 20:  # Search query from master
-                    # Let IndexerStates.idle_state handle this - just log it
-                    logging.info(f"👁️ Search query received from rank {source}")
-                    # The next idle_state iteration will process this
+                    # Process the search query directly here
+                    search_request = comm.recv(source=source, tag=20)
+                    logging.info(f"Received search query from master: {search_request}")
+                    
+                    query_text = search_request.get("query", "")
+                    search_type = search_request.get("search_type", "keyword")
+                    
+                    if query_text:
+                        # Process search query and return results to master
+                        results = IndexerStates.perform_search(query_text, search_type)
+                        comm.send(results, dest=source, tag=21)  # TAG_INDEXER_SEARCH_RESULTS = 21
+                        logging.info(f"Sent search results for '{query_text}' to master: {len(results)} URLs found")
+                        store_search_query(query_text)  # Store the query in history
+                    else:
+                        comm.send([], dest=source, tag=21)
+                        logging.warning("Empty search query received from master")
                 elif tag == 0:  # Shutdown signal
                     logging.info(f"⚠️ Shutdown signal received from rank {source}. Exiting...")
                     break
