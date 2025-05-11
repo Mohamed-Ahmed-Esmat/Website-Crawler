@@ -9,10 +9,8 @@ import subprocess
 import pysolr
 import queue
 import threading
-from google.cloud import storage
+from google.cloud import storage, pubsub_v1
 from Indexer_States import IndexerStates
-from utils import load_checkpoint, delete_checkpoint
-from google.cloud import pubsub_v1
 
 
 SOLR_URL = "http://10.10.0.43:8983/solr/"
@@ -26,7 +24,6 @@ SUBSCRIPTION_NAME = "indexer-sub"
 
 
 comm = MPI.COMM_WORLD
-rank = comm.Get_rank()
 size = comm.Get_size()
 
 hostname = socket.gethostname()
@@ -83,6 +80,7 @@ def handle_message(msg):
             progress_point = None
 
             while True:
+                logging.info(f"🌀 Transitioning to state: {state}")
                 if state == "IDLE":
                     state, data = IndexerStates.idle_state(comm)
                 elif state == "Receiving_Data":
@@ -100,21 +98,9 @@ def handle_message(msg):
             logging.error(f"⚠️ Error in indexing flow: {e}")
 
 def indexer_node():
-    logging.info(f"Indexer node started with rank {rank} of {size}")
+    logging.info(f"Indexer node started with size of {size}")
 
-    checkpoint = load_checkpoint(rank)
-    if checkpoint:
-        state = checkpoint["state_name"]
-        data = checkpoint["data"]
-        progress_point = checkpoint.get("progress_point")
-        logging.info(f"[Recovery] Node {rank} resumes from {state} with progress {progress_point}")
-    else:
-        delete_checkpoint(rank)
-        state = "IDLE"
-        data = None
-        progress_point = None
-
-
+    
     subscriber = pubsub_v1.SubscriberClient()
     subscription_path = subscriber.subscription_path(PROJECT_ID, SUBSCRIPTION_NAME)
     flow_control = pubsub_v1.types.FlowControl(max_messages=1)
