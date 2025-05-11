@@ -208,7 +208,7 @@ def master_process():
                                 logging.info(f"Master Job: Crawler {message_source} status: {message_data}")
                             elif message_tag == 999: # Crawler node reports error
                                 logging.error(f"Master Job: Crawler {message_source} reported error: {message_data}")
-                                job_crawler_tasks_assigned -= 1 # Decrement task count
+                                #job_crawler_tasks_assigned -= 1 # Decrement task count
                             elif message_tag == 98:  # Heartbeat from a crawler
                                 logging.info(f"Master Job: Heartbeat received from Crawler {message_source}: {message_data}")
                             elif message_tag == 2:  # Page content from crawler
