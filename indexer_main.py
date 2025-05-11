@@ -90,7 +90,8 @@ def handle_message(msg):
                 elif state == "Indexing":
                     state, data = IndexerStates.indexing_state(data, progress_point)
                 elif state == "Ready_For_Querying":
-                    state, data = IndexerStates.ready_for_querying_state(comm)
+                    #state, data = IndexerStates.ready_for_querying_state(comm)
+                    continue
                 elif state == "EXIT":
                     break
                 progress_point = None
