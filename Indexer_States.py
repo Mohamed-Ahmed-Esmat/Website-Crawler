@@ -48,7 +48,7 @@ class IndexerStates:
             if not page_data:
                 logging.info("Shutdown signal received. Exiting.")
                 return "EXIT", None
-            return "Receiving_Data", 
+            return "Receiving_Data", page_data
 
         # Check for search query messages from master
         if comm.iprobe(source=MPI.ANY_SOURCE, tag=TAG_INDEXER_SEARCH_QUERY):
