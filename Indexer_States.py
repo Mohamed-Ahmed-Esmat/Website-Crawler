@@ -21,7 +21,6 @@ except socket.gaierror:
 TAG_INDEXER_HEARTBEAT = 97 # Added: New tag for indexer heartbeat
 
 class IndexerStates:
-    last_heartbeat = time.time()
 
     @staticmethod
     def idle_state(comm):

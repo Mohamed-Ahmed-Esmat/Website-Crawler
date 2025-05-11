@@ -141,6 +141,7 @@ def indexer_node():
         
         # Keep MPI listener alive to respond to master and also keep the subscription active
         while True:
+            last_heartbeat = 0
             current_time = time.time()
             if current_time - last_heartbeat >= 10:                
                 rank_indexer = comm.Get_rank() # Get rank within the method
