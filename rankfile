@@ -1,5 +1,4 @@
 rank 0=10.10.0.4 slot=0
 rank 1=10.10.0.4 slot=1
 rank 2=10.10.0.2 slot=0
-rank 3=10.10.0.44 slot=0
-rank 4=10.10.0.3 slot=0
+rank 3=10.10.0.3 slot=0
