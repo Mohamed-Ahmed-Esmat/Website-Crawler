@@ -104,17 +104,39 @@ def indexer_node():
         subscriber = pubsub_v1.SubscriberClient()
         topic_path = subscriber.topic_path(PROJECT_ID, "crawler-indexer")
         subscription_path = subscriber.subscription_path(PROJECT_ID, SUBSCRIPTION_NAME)
-        subscriber.delete_subscription(subscription=subscription_path)
-        logging.info(f"❌ Deleted old subscription: {SUBSCRIPTION_NAME}")
+        
+        # Try to delete the old subscription if it exists
+        try:
+            subscriber.delete_subscription(subscription=subscription_path)
+            logging.info(f"❌ Deleted old subscription: {SUBSCRIPTION_NAME}")
+        except Exception as e:
+            logging.error(f"❌ Failed to delete subscription (might not exist): {e}")
+        
+        # Create a new subscription to the topic
+        try:
+            subscriber.create_subscription(
+                name=subscription_path, 
+                topic=topic_path
+            )
+            logging.info(f"✅ Created new subscription: {SUBSCRIPTION_NAME}")
+        except Exception as e:
+            logging.error(f"❌ Failed to create subscription: {e}")
+            
     except Exception as e:
-        logging.error(f"❌ Failed to delete subscription: {e}")
+        logging.error(f"❌ Failed during subscription setup: {e}")
     
+    # Create a new subscriber client for the subscription
     subscriber = pubsub_v1.SubscriberClient()
     subscription_path = subscriber.subscription_path(PROJECT_ID, SUBSCRIPTION_NAME)
     flow_control = pubsub_v1.types.FlowControl(max_messages=1)
 
-    subscriber.subscribe(subscription_path, callback=handle_message, flow_control=flow_control)
-    logging.info(f"📥 Indexer subscribed to topic: {SUBSCRIPTION_NAME}")
+    # Subscribe to the topic
+    try:
+        streaming_pull = subscriber.subscribe(subscription_path, callback=handle_message, flow_control=flow_control)
+        logging.info(f"📥 Indexer subscribed to topic: {SUBSCRIPTION_NAME}")
+    except Exception as e:
+        logging.error(f"❌ Failed to subscribe to topic: {e}")
+
 
 
 # Keep MPI listener alive to respond to master
