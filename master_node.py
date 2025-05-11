@@ -29,11 +29,50 @@ TAG_NODES_STATUS = 12
 TAG_SHUTDOWN_MASTER = 13 # New tag for graceful shutdown
 TAG_INDEXER_HEARTBEAT = 97 # Added: For Indexer Heartbeats
 
+NODE_HEARTBEAT_TIMEOUT = 60 # Seconds. If no heartbeat received within this time, node is considered inactive.
+node_info_map = {} # MODULE-LEVEL GLOBAL: Stores details of connected nodes
+
 project_id = "spheric-arcadia-457314-c8"
 topic_id = "crawl-tasks"
 
 publisher = pubsub_v1.PublisherClient()
 topic_path = publisher.topic_path(project_id, topic_id)
+
+# --- Helper function to get node statuses ---
+def get_updated_node_statuses(): # No parameters needed if using global node_info_map and NODE_HEARTBEAT_TIMEOUT
+    """
+    Updates the 'active' status in the global node_info_map based on last_seen time
+    and generates a list of node statuses for server requests.
+    Returns:
+        list: A list of dictionaries, e.g., 
+              [{"type": "crawler", "ip_address": "10.10.0.2", "active": True}, ...]
+    """
+    global node_info_map, NODE_HEARTBEAT_TIMEOUT # Explicitly use global
+    server_status_list = []
+    current_time = time.time()
+    ranks_to_delete = [] # If we want to remove very old entries
+
+    for rank_key, details in list(node_info_map.items()): # Iterate over a copy if modifying
+        if current_time - details.get("last_seen", 0) > NODE_HEARTBEAT_TIMEOUT:
+            node_info_map[rank_key]["active"] = False
+            # Optionally, if a node is inactive for too long, consider removing it
+            # if current_time - details.get("last_seen", 0) > NODE_HEARTBEAT_TIMEOUT * 10: 
+            #     ranks_to_delete.append(rank_key)
+        else:
+            node_info_map[rank_key]["active"] = True # Ensure it's marked active if within timeout
+
+        server_status_list.append({
+            "type": details.get("type", "unknown"),
+            "ip_address": details.get("ip", "N/A"),
+            "active": node_info_map[rank_key]["active"]
+        })
+    
+    # for rank_key in ranks_to_delete:
+    #     del node_info_map[rank_key]
+    #     logging.info(f"Master: Removed stale node entry for rank {rank_key} due to prolonged inactivity.")
+
+    return server_status_list
+# --- End Helper --- 
 
 def handle_server_requests(comm, status):
     """
@@ -77,13 +116,11 @@ def handle_server_requests(comm, status):
             # Handle nodes status request directly
             comm.recv(source=source_rank, tag=TAG_NODES_STATUS) # Expecting None
             logging.info(f"Master: Received nodes status request from server (rank {source_rank})")
-            # TODO: Implement logic to dynamically fetch nodes status
-            nodes_status = [
-                {"type": "crawler", "ip_address": "10.10.0.2", "active": True},
-                {"type": "indexer", "ip_address": "10.10.0.3", "active": False}
-            ] # Placeholder
+            
+            # Now calls the global-aware helper function
+            nodes_status = get_updated_node_statuses() 
             comm.send(nodes_status, dest=source_rank, tag=TAG_NODES_STATUS)
-            logging.info(f"Master: Sent node status back to server (rank {source_rank})")
+            logging.info(f"Master: Sent node status ({len(nodes_status)} entries) back to server (rank {source_rank})")
 
         elif tag == TAG_SHUTDOWN_MASTER:
             logging.info(f"Master: Received shutdown signal from server (rank {source_rank}).")
@@ -110,7 +147,8 @@ def master_process():
     size = comm.Get_size()
     status = MPI.Status()
 
-    logging.info(f"Master node (rank {rank}) started with world size {size}. Initializing...")
+    # node_info_map is now global, master_process will use the global instance.
+    logging.info(f"Master node (rank {rank}) started with world size {size}. Using global node_info_map.")
 
     # Node configuration (assuming server is rank 1 and not part of these calcs for crawler/indexer roles)
     # If server (rank 1) is exclusively for API, then it's not a crawler or indexer.
@@ -211,14 +249,28 @@ def master_process():
                                 logging.error(f"Master Job: Crawler {message_source} reported error: {message_data}")
                                 #job_crawler_tasks_assigned -= 1 # Decrement task count
                             elif message_tag == 98:  # Heartbeat from a crawler
-                                # logging.info(f"Master Job: Heartbeat received from Crawler {message_source}: {message_data}") # Old logging
                                 node_ip = message_data.get("ip_address", "N/A")
-                                node_rank = message_data.get("rank", "N/A")
-                                logging.info(f"Master: Received Heartbeat from CRAWLER. Rank: {node_rank}, IP: {node_ip}, Data: {message_data}")
+                                node_rank = message_data.get("rank", message_source) # Use message_source as fallback for rank
+                                reported_status = message_data.get("status", "UNKNOWN")
+                                node_info_map[node_rank] = {
+                                    "type": "crawler",
+                                    "ip": node_ip,
+                                    "last_seen": time.time(),
+                                    "reported_status": reported_status,
+                                    "active": True # Mark active on heartbeat
+                                }
+                                logging.info(f"Master: Heartbeat/Status from CRAWLER Rank {node_rank} (IP: {node_ip}). Status: {reported_status}. Node map updated.")
                             elif message_tag == TAG_INDEXER_HEARTBEAT: # Added: Handle Indexer Heartbeat
                                 node_ip = message_data.get("ip_address", "N/A")
-                                node_rank = message_data.get("rank", "N/A")
-                                logging.info(f"Master: Received Heartbeat from INDEXER. Rank: {node_rank}, IP: {node_ip}, Data: {message_data}")
+                                node_rank = message_data.get("rank", message_source) # Use message_source as fallback for rank
+                                node_info_map[node_rank] = {
+                                    "type": "indexer",
+                                    "ip": node_ip,
+                                    "last_seen": time.time(),
+                                    "reported_status": "ACTIVE", # Indexer heartbeat implies it's active
+                                    "active": True # Mark active on heartbeat
+                                }
+                                logging.info(f"Master: Heartbeat from INDEXER Rank {node_rank} (IP: {node_ip}). Node map updated.")
                             elif message_tag == 2:  # Page content from crawler
                                 logging.info(f"Master Job: Page content received from Crawler {message_source}. Forwarding to an indexer...")
                                 if active_indexer_node_ranks:
