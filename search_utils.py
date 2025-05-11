@@ -4,7 +4,6 @@ import requests
 import os
 from pymongo import MongoClient
 from datetime import datetime
-from utils import upload_search_history_to_gcs
 
 solr = pysolr.Solr('http://localhost:8983/solr/indexer_core', always_commit=False)
 
