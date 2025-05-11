@@ -65,9 +65,9 @@ class IndexerSearch:
             logging.error(f"❌ Failed to index autocomplete doc {doc['id']}: {e}")
 
     @staticmethod
-    def search_stemmed_query(query_text: str):
+    def search_stemmed_query(query_text: str, max_results=10000):
         try:
-            results = solr.search(f"content_stemmed:{query_text}")
+            results = solr.search(f"content_stemmed:{query_text}", **{'rows': max_results})
             return results
         except Exception as e:
             logging.error(f"⚠️ Error in search_stemmed_query: {e}")
@@ -95,10 +95,10 @@ class IndexerSearch:
             print("❌ Failed to fetch autocomplete suggestions.")
 
     @staticmethod
-    def fuzzy_query_search(query: str):
+    def fuzzy_query_search(query: str, max_results=10000):
         try:
             fuzzy_query = f"{query}~"
-            results = solr.search(f"content_stemmed:{fuzzy_query}")
+            results = solr.search(f"content_stemmed:{fuzzy_query}", **{'rows': max_results})
             return results
         except Exception as e:
             logging.error(f"Fuzzy search error: {e}")
