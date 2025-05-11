@@ -86,9 +86,7 @@ def search():
         }, dest=0, tag=TAG_SEARCH)
         
         resulted_urls = comm.recv(source=0, tag=TAG_SEARCH)
-
-        resulted_urls = ['http://example.com/search1', 'http://example.com/search2']  # Example URLs
-
+        
         return jsonify({
             "resulted_urls": resulted_urls
         }), 200
