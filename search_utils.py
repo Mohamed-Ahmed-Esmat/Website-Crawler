@@ -4,6 +4,7 @@ import requests
 import os
 from pymongo import MongoClient
 from datetime import datetime
+from google.cloud import storage
 
 solr = pysolr.Solr('http://localhost:8983/solr/indexer_core', always_commit=False)
 
