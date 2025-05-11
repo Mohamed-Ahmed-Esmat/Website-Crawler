@@ -26,6 +26,7 @@ logging.basicConfig(
 TAG_START_CRAWLING = 10
 TAG_SEARCH = 11
 TAG_NODES_STATUS = 12
+TAG_SHUTDOWN_MASTER = 13 # New tag for graceful shutdown
 
 project_id = "spheric-arcadia-457314-c8"
 topic_id = "crawl-tasks"
@@ -34,135 +35,248 @@ publisher = pubsub_v1.PublisherClient()
 topic_path = publisher.topic_path(project_id, topic_id)
 
 def handle_server_requests(comm, status):
-    """Handle requests from the server node."""
+    """
+    Handle requests from the server node (assumed to be rank 1).
+    For TAG_START_CRAWLING, it returns job info to master_process.
+    For other tags, it handles them directly and sends a response.
+    """
+    job_info_to_return = None
+    # Check for messages specifically from source 1 (the server node)
     if comm.iprobe(source=1, tag=MPI.ANY_TAG, status=status):
         tag = status.Get_tag()
+        source_rank = status.Get_source() # This will be 1
+
         if tag == TAG_START_CRAWLING:
             # Handle start crawling request
             data = comm.recv(source=1, tag=TAG_START_CRAWLING)
             seed_urls = data.get("seed_urls", [])
             max_depth = data.get("max_depth", 3)
-            logging.info(f"Received start crawling request: seed_urls={seed_urls}, max_depth={max_depth}")
-
-            # TODO: Implement actual crawling logic here
-            # Simulate crawling and return a list of URLs
-            resulted_urls = [f"{url}/page1" for url in seed_urls]  # Example result
-            comm.send(resulted_urls, dest=1, tag=TAG_START_CRAWLING)
+            logging.info(f"Master: Received new crawl job request from server (rank {source_rank}): URLs={seed_urls}, depth={max_depth}")
+            job_info_to_return = {
+                "type": "crawl_job",
+                "seed_urls": seed_urls,
+                "max_depth": max_depth,
+                "reply_to_rank": source_rank,
+                "reply_tag": TAG_START_CRAWLING # Master will use this tag to send the final list
+            }
+            # IMPORTANT: No comm.send back to server here; master_process will do it when job is done.
 
         elif tag == TAG_SEARCH:
-            # Handle search request
-            data = comm.recv(source=1, tag=TAG_SEARCH)
+            # Handle search request directly
+            data = comm.recv(source=source_rank, tag=TAG_SEARCH)
             query = data.get("query", "")
             search_type = data.get("search_type", "keyword")
-            logging.info(f"Received search request: query={query}, search_type={search_type}")
-
+            logging.info(f"Master: Received search request from server (rank {source_rank}): query='{query}', type='{search_type}'")
             # TODO: Implement actual search logic here
-            # Simulate search and return a list of URLs
-            resulted_urls = [f"http://example.com/{query}/result1", f"http://example.com/{query}/result2"]
-            comm.send(resulted_urls, dest=1, tag=TAG_SEARCH)
+            resulted_urls = [f"http://example.com/search/{query}/1", f"http://example.com/search/{query}/2"] # Placeholder
+            comm.send(resulted_urls, dest=source_rank, tag=TAG_SEARCH)
+            logging.info(f"Master: Sent search results for '{query}' back to server (rank {source_rank})")
 
         elif tag == TAG_NODES_STATUS:
-            # Handle nodes status request
-            comm.recv(source=1, tag=TAG_NODES_STATUS)  # Receive None
-            logging.info("Received nodes status request")
-
-            # TODO: Implement logic to dynamically fetch nodes status from the system
-            # Simulate nodes status and return a list of dicts
+            # Handle nodes status request directly
+            comm.recv(source=source_rank, tag=TAG_NODES_STATUS) # Expecting None
+            logging.info(f"Master: Received nodes status request from server (rank {source_rank})")
+            # TODO: Implement logic to dynamically fetch nodes status
             nodes_status = [
                 {"type": "crawler", "ip_address": "10.10.0.2", "active": True},
                 {"type": "indexer", "ip_address": "10.10.0.3", "active": False}
-            ]
-            comm.send(nodes_status, dest=1, tag=TAG_NODES_STATUS)
+            ] # Placeholder
+            comm.send(nodes_status, dest=source_rank, tag=TAG_NODES_STATUS)
+            logging.info(f"Master: Sent node status back to server (rank {source_rank})")
 
-def master_process(): 
-    """ 
-    Main process for the master node. 
-    Handles task distribution, worker management, and coordination. 
-    """ 
-    comm = MPI.COMM_WORLD 
-    rank = comm.Get_rank() 
-    size = comm.Get_size() 
-    status = MPI.Status() 
- 
-    logging.info(f"Master node started with rank {rank} of {size}") 
- 
-    # Initialize task queue, database connections, etc. 
-    # ... (Implementation needed) ... 
- 
-    crawler_nodes = size - 2 # Assuming master and at least one indexer node 
-    indexer_nodes = 1 # At least one indexer node 
- 
-    if crawler_nodes <= 0 or indexer_nodes <= 0: 
-        logging.error("Not enough nodes to run crawler and indexer. Need at least 3 nodes (1 master, 1 crawler, 1 indexer)") 
-        return 
- 
-    active_crawler_nodes = list(range(1, 1 + crawler_nodes)) # Ranks for crawler nodes (assuming rank 0 is master) 
-    active_indexer_nodes = list(range(1 + crawler_nodes, size)) # Ranks for indexer nodes 
- 
-    logging.info(f"Active Crawler Nodes: {active_crawler_nodes}") 
-    logging.info(f"Active Indexer Nodes: {active_indexer_nodes}") 
+        elif tag == TAG_SHUTDOWN_MASTER:
+            logging.info(f"Master: Received shutdown signal from server (rank {source_rank}).")
+            # Potentially receive any data if the protocol expects it, though likely None for a shutdown
+            comm.recv(source=source_rank, tag=TAG_SHUTDOWN_MASTER) 
+            job_info_to_return = {"type": "shutdown"}
 
-    seed_urls = ["http://example.com", "http://example.org"] # Example seed URLs - replace with actual seed URLs 
-    urls_to_crawl_queue = seed_urls  # Simple list as initial queue - replace with a distributed queue 
- 
-    task_count = 0 
-    crawler_tasks_assigned = 0 
- 
- 
-    while urls_to_crawl_queue or crawler_tasks_assigned > 0: # Continue as long as there are URLs to crawl or tasks in progress 
-        # Handle server requests
-        handle_server_requests(comm, status)
+        else:
+            # Handle other unexpected tags from server if necessary
+            logging.warning(f"Master: Received message with unhandled tag {tag} from server (rank {source_rank})")
+            # Optionally receive it to clear the buffer if data is expected
+            # data = comm.recv(source=source_rank, tag=tag)
 
-        # Check for completed crawler tasks and results from crawler nodes 
-        if crawler_tasks_assigned > 0: 
-            if comm.iprobe(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status): # Non-blocking check for incoming messages 
-                message_source = status.Get_source() 
-                message_tag = status.Get_tag() 
-                message_data = comm.recv(source=message_source, tag=message_tag) 
- 
-                if message_tag == 1: # Crawler completed task and sent back extracted URLs 
-                    crawler_tasks_assigned -= 1 
-                    new_urls = message_data['urls'] # Assuming message_data is a list of URLs 
-                    if new_urls: 
-                        urls_to_crawl_queue.extend(new_urls) # Add newly discovered URLs to the queue 
-                    logging.info(f"Master received URLs from Crawler {message_source}, URLs in queue: {len(urls_to_crawl_queue)}, Tasks assigned: {crawler_tasks_assigned}") 
-                elif message_tag == 99: # Crawler node reports status/heartbeat 
-                    logging.info(f"Crawler {message_source} status: {message_data}") # Example status message 
-                elif message_tag == 999: # Crawler node reports error 
-                    logging.error(f"Crawler {message_source} reported error: {message_data}") 
-                    crawler_tasks_assigned -= 1 # Decrement task count even on error, consider re-assigning task in real implementation 
-                elif message_tag == 98:  # Heartbeat
-                    logging.info(f"Heartbeat received from Crawler {message_source}: {message_data}")
-                elif message_tag == 2:  # Page content from crawler
-                    logging.info(f"Page content received from Crawler {message_source}. Forwarding to indexer...")
-                    indexer_rank = active_indexer_nodes[0]  # Assuming one indexer node for now
-                    comm.send(message_data, dest=indexer_rank, tag=2)  # Forward to indexer
+    return job_info_to_return
 
-        # Assign new crawling tasks if there are URLs in the queue and available crawler nodes 
-        while urls_to_crawl_queue and crawler_tasks_assigned < crawler_nodes: # Limit tasks to available crawler nodes for simplicity in this skeleton 
-            url_to_crawl = urls_to_crawl_queue.pop(0) # Get URL from queue (FIFO for simplicity) 
-            available_crawler_rank = active_crawler_nodes[crawler_tasks_assigned % len(active_crawler_nodes)] # Simple round-robin assignment 
-            task_id = task_count 
-            task_count += 1 
-            task_metadata = {"urls": [url_to_crawl], "max_depth": 3}  # Example metadata
-            # comm.send(task_metadata, dest=available_crawler_rank, tag=0) # Send task with metadata (MPI version, now commented out)
-            # --- Pub/Sub version ---
-            message_json = json.dumps(task_metadata)
-            message_bytes = message_json.encode("utf-8")
-            future = publisher.publish(topic_path, message_bytes)
-            logging.info(f"Published crawl task to Pub/Sub: {task_metadata}, message ID: {future.result()}")
-            crawler_tasks_assigned += 1 
-            logging.info(f"Master assigned task {task_id} (crawl {url_to_crawl}) to Pub/Sub topic 'crawl-tasks', Tasks assigned: {crawler_tasks_assigned}") 
-            time.sleep(0.1) # Small delay to prevent overwhelming master in this example 
-        time.sleep(1) # Master node's main loop sleep - adjust as needed 
-    logging.info("Master node finished URL distribution. Waiting for crawlers to complete...") 
+def master_process():
+    """
+    Main process for the master node.
+    Handles task distribution, worker management, and coordination.
+    Now operates in a job-oriented manner, processing one crawl job at a time.
+    """
+    comm = MPI.COMM_WORLD
+    rank = comm.Get_rank()
+    size = comm.Get_size()
+    status = MPI.Status()
 
-    # Send shutdown signal to crawler nodes
-    for crawler_rank in active_crawler_nodes:
-        comm.send(None, dest=crawler_rank, tag=0)  # Empty task signals shutdown
-        logging.info(f"Shutdown signal sent to Crawler {crawler_rank}")
+    logging.info(f"Master node (rank {rank}) started with world size {size}. Initializing...")
 
-# In a real system, you would have more sophisticated shutdown and result aggregation logic 
-print("Master Node Finished.") 
-if __name__ == '__main__': 
+    # Node configuration (assuming server is rank 1 and not part of these calcs for crawler/indexer roles)
+    # If server (rank 1) is exclusively for API, then it's not a crawler or indexer.
+    # The original calculation:
+    # crawler_nodes = size - 2 # Assuming master and at least one indexer node
+    # Let's adjust if server is a dedicated rank:
+    # Assuming master=0, server=1, then other roles start from rank 2.
+    # Number of worker nodes available for crawling/indexing = size - 2 (master, server)
+    
+    # Sticking to user's current node counting for now, and assuming server is rank 1.
+    # User's master_node.py (from previous context) has:
+    crawler_nodes_count = size - 2 # Assuming this means (size - master - at_least_one_indexer)
+    indexer_nodes_count = 1      # Assuming at least one
+
+    if crawler_nodes_count <= 0: # Simplified check
+        logging.error(f"Master: Not enough nodes for crawlers. Need at least 3 nodes in total (master, server, 1 crawler). Found size={size}")
+        return
+    
+    # These rank assignments assume server @ 1 is NOT a crawler/indexer.
+    # If server @ 1 IS a crawler, these ranges need adjustment.
+    # For Pub/Sub, crawler ranks are less critical for master->crawler task send.
+    # But they ARE used for shutdown signals and potentially for indexer communication.
+    # The original code had active_crawler_nodes starting from 1.
+    # If server is rank 1, and crawlers need distinct MPI ranks for comms (e.g. shutdown)
+    # then crawlers should start from rank 2.
+    # For now, let's use the original logic for active_crawler_nodes and active_indexer_nodes
+    # and assume server at rank 1 is handled distinctly by handle_server_requests.
+    active_crawler_node_ranks = list(range(1, 1 + crawler_nodes_count)) # Ranks for crawler nodes (original logic)
+    active_indexer_node_ranks = list(range(1 + crawler_nodes_count, size)) # Ranks for indexer nodes (original logic)
+    
+    logging.info(f"Master: Deduced Active Crawler Node MPI Ranks: {active_crawler_node_ranks} (count: {crawler_nodes_count})")
+    logging.info(f"Master: Deduced Active Indexer Node MPI Ranks: {active_indexer_node_ranks} (count: {len(active_indexer_node_ranks)})")
+    logging.info("Master: Initialized. Waiting for crawl job requests from server (rank 1)...")
+
+    # Main loop to listen for and process crawl jobs one by one
+    while True:
+        # Check for any incoming requests from the server (rank 1)
+        # This call will return job details if a new crawl job is posted, or None otherwise.
+        # It will also handle direct/immediate requests like status or search.
+        current_job_details = handle_server_requests(comm, status)
+
+        if current_job_details and current_job_details.get("type") == "shutdown":
+            logging.info("Master: Shutdown instruction received. Exiting main processing loop.")
+            break # Exit the while True loop to proceed to shutdown logic
+
+        if current_job_details and current_job_details["type"] == "crawl_job":
+            job_seed_urls = current_job_details["seed_urls"]
+            job_max_depth = current_job_details["max_depth"]
+            job_reply_to_rank = current_job_details["reply_to_rank"]
+            job_reply_tag = current_job_details["reply_tag"]
+
+            logging.info(f"Master: Starting new crawl job. Seeds: {job_seed_urls}, Depth: {job_max_depth}. Will reply to rank {job_reply_to_rank} with tag {job_reply_tag}.")
+
+            if not job_seed_urls:
+                logging.warning("Master: Crawl job request received with no seed URLs. Skipping job and notifying server.")
+                comm.send([], dest=job_reply_to_rank, tag=job_reply_tag) # Send empty list for no seeds
+                continue # Go back to waiting for the next job request
+
+            # Initialize per-job data structures
+            urls_to_crawl_queue = list(job_seed_urls) # Queue for the current job
+            crawled_urls_set = set(job_seed_urls)     # Set of all unique URLs found in this job
+            
+            job_task_count = 0           # Pub/Sub task counter for this job
+            job_crawler_tasks_assigned = 0 # Number of tasks currently assigned to Pub/Sub for this job
+
+            logging.info(f"Master: Job processing started. Initial queue size: {len(urls_to_crawl_queue)}. Assigned tasks: {job_crawler_tasks_assigned}.")
+
+            # Inner loop for processing the current crawl job
+            while urls_to_crawl_queue or job_crawler_tasks_assigned > 0:
+                # Check for completed crawler tasks (Pub/Sub results via MPI from crawlers)
+                # IMPORTANT: This assumes crawlers are MPI processes that send results back to master using MPI.
+                # Tags used here (1, 99, 999, 98, 2) must be distinct from server communication tags if server is also a crawler.
+                # If server is rank 1 and also a crawler, need careful tag/source checking here.
+                # Assuming server (rank 1) messages are fully handled by handle_server_requests.
+                if job_crawler_tasks_assigned > 0:
+                    # Check for messages from ANY source (could be crawlers)
+                    if comm.iprobe(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status):
+                        message_source = status.Get_source()
+                        message_tag = status.Get_tag()
+
+                        # Avoid re-processing a server message if it slipped through
+                        if message_source == 1 and message_tag in [TAG_START_CRAWLING, TAG_SEARCH, TAG_NODES_STATUS]:
+                            logging.debug(f"Master: Server message (source {message_source}, tag {message_tag}) detected during job. Will be handled in next outer loop.")
+                        else:
+                            # Process message (assumed from a crawler)
+                            message_data = comm.recv(source=message_source, tag=message_tag)
+                            if message_tag == 1: # Crawler task completed, sent back extracted URLs
+                                job_crawler_tasks_assigned -= 1
+                                newly_discovered_urls = message_data.get('urls', [])
+                                if newly_discovered_urls:
+                                    for url in newly_discovered_urls:
+                                        crawled_urls_set.add(url) # Add to this job's set of found URLs
+                                logging.info(f"Master Job: Crawler {message_source} sent {len(newly_discovered_urls)} URLs. Job's total unique: {len(crawled_urls_set)}. Job tasks assigned: {job_crawler_tasks_assigned}")
+                            
+                            elif message_tag == 99: # Crawler node reports status/heartbeat
+                                logging.info(f"Master Job: Crawler {message_source} status: {message_data}")
+                            elif message_tag == 999: # Crawler node reports error
+                                logging.error(f"Master Job: Crawler {message_source} reported error: {message_data}")
+                                job_crawler_tasks_assigned -= 1 # Decrement task count
+                            elif message_tag == 98:  # Heartbeat from a crawler
+                                logging.info(f"Master Job: Heartbeat received from Crawler {message_source}: {message_data}")
+                            elif message_tag == 2:  # Page content from crawler
+                                logging.info(f"Master Job: Page content received from Crawler {message_source}. Forwarding to an indexer...")
+                                if active_indexer_node_ranks:
+                                    # Simple load balancing: send to the first available indexer or round-robin
+                                    indexer_rank_to_send = active_indexer_node_ranks[job_task_count % len(active_indexer_node_ranks)]
+                                    comm.send(message_data, dest=indexer_rank_to_send, tag=2) # Forward to specific indexer
+                                else:
+                                    logging.warning("Master Job: No active indexer nodes configured to forward page content.")
+                            else:
+                                logging.warning(f"Master Job: Received unhandled message tag {message_tag} from source {message_source}")
+                
+                # Assign new crawling tasks for the current job via Pub/Sub
+                # Limit tasks assigned to be related to crawler_nodes_count (e.g., not to overwhelm Pub/Sub or crawlers)
+                while urls_to_crawl_queue and job_crawler_tasks_assigned < crawler_nodes_count * 2: # Example: allow up to 2 tasks per nominal crawler
+                    url_to_crawl = urls_to_crawl_queue.pop(0)
+                    current_task_id_in_job = job_task_count
+                    job_task_count += 1
+                    
+                    task_metadata = {"urls": [url_to_crawl], "max_depth": job_max_depth} # Use current job's max_depth
+                    
+                    message_json = json.dumps(task_metadata)
+                    message_bytes = message_json.encode("utf-8")
+                    try:
+                        future = publisher.publish(topic_path, message_bytes)
+                        # future.result() # Ensure publishing is complete, can be blocking
+                        logging.info(f"Master Job: Published task {current_task_id_in_job} (crawl {url_to_crawl}, depth {job_max_depth}) to Pub/Sub. Tasks assigned for job: {job_crawler_tasks_assigned + 1}. Message ID: {future.result(timeout=10)}")
+                        job_crawler_tasks_assigned += 1
+                    except Exception as e:
+                        logging.error(f"Master Job: Failed to publish task {current_task_id_in_job} to Pub/Sub: {e}. Re-adding '{url_to_crawl}' to queue.")
+                        urls_to_crawl_queue.insert(0, url_to_crawl) # Re-add to front of queue
+                        # Potentially break from this assignment loop if Pub/Sub is failing repeatedly
+                        break 
+                    
+                    time.sleep(0.05) # Small delay between Pub/Sub posts
+                
+                time.sleep(0.2) # Main job processing loop sleep, check for crawler results/assign tasks
+
+            # Current crawl job's inner loop has finished
+            logging.info(f"Master: Crawl job for seeds {job_seed_urls} (depth {job_max_depth}) has completed processing.")
+            logging.info(f"Master: Total unique URLs found for this job: {len(crawled_urls_set)}.")
+            
+            final_urls_list_for_job = list(crawled_urls_set)
+            comm.send(final_urls_list_for_job, dest=job_reply_to_rank, tag=job_reply_tag)
+            logging.info(f"Master: Sent final list of {len(final_urls_list_for_job)} URLs to server (rank {job_reply_to_rank}) for the completed job.")
+            logging.info("Master: Ready for next crawl job request from server.")
+            
+        else:
+            # No new crawl job was initiated by handle_server_requests in this iteration
+            # (it might have handled an immediate request like status, or no request came)
+            time.sleep(0.1) # Pause briefly before checking server for requests again
+
+    # The following shutdown logic is now reachable if the loop is broken.
+    logging.info("Master node main loop exited. Performing shutdown...")
+
+    # Send shutdown signal to crawler nodes (if they are MPI processes expecting this)
+    for crawler_rank_val in active_crawler_node_ranks:
+        logging.info(f"Master: Sending shutdown signal (None, tag 0) to presumed Crawler MPI rank {crawler_rank_val}")
+        comm.send(None, dest=crawler_rank_val, tag=0) # Empty task signals shutdown
+
+    # Send shutdown to indexers too if they expect it
+    for indexer_rank_val in active_indexer_node_ranks:
+        logging.info(f"Master: Sending shutdown signal (None, tag 0) to presumed Indexer MPI rank {indexer_rank_val}")
+        comm.send(None, dest=indexer_rank_val, tag=0) # Assuming indexers also shutdown on tag 0
+
+    logging.info("Master Node Finished sending shutdown signals.")
+
+
+if __name__ == '__main__':
     master_process()

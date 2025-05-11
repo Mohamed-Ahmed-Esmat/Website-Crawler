@@ -5,10 +5,12 @@ import requests
 import json
 import os
 import sys
+import logging
 
 TAG_START_CRAWLING = 10
 TAG_SEARCH = 11
 TAG_NODES_STATUS = 12
+TAG_SHUTDOWN_MASTER = 13
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
@@ -99,9 +101,9 @@ def get_system_status():
     """API endpoint to get the status of all crawler nodes and indexers"""
     try:
 
-        comm.send(None, dest=0, tag=TAG_START_CRAWLING)
+        comm.send(None, dest=0, tag=TAG_NODES_STATUS)
 
-        nodes = comm.recv(source=0, tag=TAG_START_CRAWLING)
+        nodes = comm.recv(source=0, tag=TAG_NODES_STATUS)
 
         return jsonify({
             "nodes": nodes,
@@ -111,6 +113,31 @@ def get_system_status():
         
     except Exception as e:
         return jsonify({"error": f"Server error: {str(e)}"}), 500
+
+@app.route('/shutdown-master', methods=['POST'])
+def shutdown_master_endpoint():
+    """API endpoint to trigger the shutdown of the master node."""
+    try:
+        if rank == 1: # Only the designated server rank should send this
+            logging.info(f"Server (rank {rank}): Received HTTP request to shutdown master node.")
+            # Send shutdown signal to master node (rank 0)
+            comm.send(None, dest=0, tag=TAG_SHUTDOWN_MASTER)
+            logging.info(f"Server (rank {rank}): Sent TAG_SHUTDOWN_MASTER to master (rank 0).")
+            
+            # Optionally, master could send an ack. For simplicity, we don't wait for one here.
+            # If master sends an ack, server would do a comm.recv here.
+            
+            return jsonify({"message": "Shutdown signal sent to master node."}), 200
+        else:
+            # This should ideally not happen if only rank 1 runs the Flask app.
+            return jsonify({"error": "This MPI rank is not authorized to shut down the master."}), 403
+
+    except MPI.Exception as mpi_e:
+        logging.error(f"Server (rank {rank}): MPI Error during master shutdown: {mpi_e}")
+        return jsonify({"error": f"MPI error during master shutdown: {str(mpi_e)}"}), 500
+    except Exception as e:
+        logging.error(f"Server (rank {rank}): General error during master shutdown: {e}")
+        return jsonify({"error": f"Server error during master shutdown: {str(e)}"}), 500
 
 def start_server():
     """Start the Flask server"""
