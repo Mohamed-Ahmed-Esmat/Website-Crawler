@@ -132,27 +132,35 @@ def indexer_node():
 
     # Subscribe to the topic
     try:
-        streaming_pull = subscriber.subscribe(subscription_path, callback=handle_message, flow_control=flow_control)
+        # The key issue is here - we need to store this future and keep it alive
+        streaming_pull_future = subscriber.subscribe(
+            subscription_path, 
+            callback=handle_message, 
+            flow_control=flow_control
+        )
         logging.info(f"📥 Indexer subscribed to topic: {SUBSCRIPTION_NAME}")
+        
+        # Keep MPI listener alive to respond to master and also keep the subscription active
+        while True:
+            if comm.iprobe(source=MPI.ANY_SOURCE, tag=2):
+                request = comm.recv(source=MPI.ANY_SOURCE, tag=2)
+                url = request.get("url")
+                client = MongoClient("mongodb://localhost:27017/")
+                page = client["search_database"]["indexed_pages"].find_one({"url": url})
+                if page:
+                    comm.send(page, dest=0, tag=2)
+                    logging.info(f"📦 Sent indexed content of {url} to master via MPI")
+                else:
+                    comm.send({"error": "not_found"}, dest=0, tag=2)
+                    logging.warning(f"❌ Requested content not found in DB: {url}")
+            time.sleep(0.2)
+            
     except Exception as e:
         logging.error(f"❌ Failed to subscribe to topic: {e}")
-
-
-
-# Keep MPI listener alive to respond to master
-    while True:
-        if comm.iprobe(source=MPI.ANY_SOURCE, tag=2):
-            request = comm.recv(source=MPI.ANY_SOURCE, tag=2)
-            url = request.get("url")
-            client = MongoClient("mongodb://localhost:27017/")
-            page = client["search_database"]["indexed_pages"].find_one({"url": url})
-            if page:
-                comm.send(page, dest=0, tag=2)
-                logging.info(f"📦 Sent indexed content of {url} to master via MPI")
-            else:
-                comm.send({"error": "not_found"}, dest=0, tag=2)
-                logging.warning(f"❌ Requested content not found in DB: {url}")
-        time.sleep(0.2)
+        # Make sure to close the subscriber client
+        if 'streaming_pull_future' in locals():
+            streaming_pull_future.cancel()
+        subscriber.close()
 
 if __name__ == "__main__":
 
