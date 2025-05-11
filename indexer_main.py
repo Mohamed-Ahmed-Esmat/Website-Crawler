@@ -168,20 +168,19 @@ def indexer_node():
                     try:
                         # Use the IndexerStates.search method to perform the search
                         search_results = IndexerStates.search(query, search_type)
-                        print(f"Search results: {search_results}")
 
                         # Extract URLs from the Solr results
-                        #urls = []
-                        #if search_results:
-                        #    for result in search_results:
-                        #        url = result.get("id")
-                        #        if url:
-                        #            urls.append(url)
+                        urls = []
+                        if search_results:
+                            for result in search_results:
+                                url = result.get("id")
+                                if url:
+                                    urls.append(url)
 
-                        #logging.info(f"🔍 Search for '{query}' ({search_type}) found {len(urls)} results")
+                        logging.info(f"🔍 Search for '{query}' ({search_type}) found {len(urls)} results")
 
                         # Send results back to master
-                        #comm.send(urls, dest=0, tag=21)
+                        comm.send(urls, dest=0, tag=21)
 
                     except Exception as e:
                         logging.error(f"❌ Error processing search request: {e}")
