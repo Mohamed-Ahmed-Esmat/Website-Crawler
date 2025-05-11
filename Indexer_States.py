@@ -6,7 +6,7 @@ import pickle
 import re
 import pysolr
 from search_utils import IndexerSearch
-from utils import save_checkpoint, hash_url, store_indexed_page
+from utils import hash_url, store_indexed_page
 from history_utils import store_search_query, get_search_history
 
 
@@ -27,7 +27,6 @@ class IndexerStates:
             if not page_data:
                 logging.info("Shutdown signal received. Exiting.")
                 return "EXIT", None
-            save_checkpoint("Receiving_Data", "received_message", page_data)
             return "Receiving_Data", page_data
         else:
             time.sleep(0.5)
@@ -53,13 +52,10 @@ class IndexerStates:
                 logging.warning("Invalid or missing 'url'.")
                 return "IDLE", None
 
-            save_checkpoint("Receiving_Data", "validated_url", page_data)
-
             if not content or not isinstance(content, str):
                 logging.warning("Invalid or missing 'content'.")
                 return "IDLE", None
 
-            save_checkpoint("Receiving_Data", "validated_content", page_data)
             logging.info(f"Input validated successfully for URL: {url}")
 
             # Check if already indexed
@@ -89,13 +85,11 @@ class IndexerStates:
                 logging.warning("Invalid content format during parsing.")
                 return "IDLE", None
 
-            save_checkpoint("Parsing", "loaded_content", data)
             content = re.sub(r'<[^>]+>', '', content)
             tokens = content.split()
             clean_words = [word.lower() for word in tokens if word.isalpha()]
 
             data["words"] = clean_words
-            save_checkpoint("Parsing", "filtered_words", data)
             logging.info(f"Filtering complete. {len(clean_words)} clean words kept.")
             return "Indexing", {"url": url, "words": clean_words}
 
@@ -161,7 +155,6 @@ class IndexerStates:
                     page_data = comm.recv(source=MPI.ANY_SOURCE, tag=2)
                     if page_data:
                         logging.info("New crawler data received! Switching to Receiving_Data...")
-                        save_checkpoint("Receiving_Data", "received_message", page_data)
                         return "Receiving_Data", page_data
 
                 query = input("Enter keyword (or 'exit' to stop): ").strip().lower()

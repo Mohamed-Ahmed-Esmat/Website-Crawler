@@ -5,36 +5,9 @@ import hashlib
 from pymongo import MongoClient
 from datetime import datetime
 
-def save_checkpoint(current_state, progress_point, data, rank=0):
-    """
-    Save indexer state per node (rank) for crash recovery.
-    """
-    filename = f'indexer_{rank}_checkpoint.pkl'
-    with open(filename, 'wb') as f:
-        pickle.dump({
-            "state_name": current_state,
-            "progress_point": progress_point,
-            "data": data
-        }, f)
-    logging.info(f"[Checkpoint] State saved to {filename}")
+def save_checkpoint(current_state, progress_point, data):
+    filename = f'indexer_checkpoint.pkl'
 
-
-def load_checkpoint(rank=0):
-    """
-    Load checkpoint for a given indexer node (rank).
-    """
-    filename = f'indexer_{rank}_checkpoint.pkl'
-    if os.path.exists(filename):
-        with open(filename, 'rb') as f:
-            logging.info(f"[Checkpoint] Resuming from {filename}")
-            return pickle.load(f)
-    return None
-
-def delete_checkpoint(rank=0):
-    filename = f'indexer_{rank}_checkpoint.pkl'
-    if os.path.exists(filename):
-        os.remove(filename)
-        logging.info(f"[Checkpoint] Deleted checkpoint {filename}")
 
 def save_top_words(index):
     word_counts = {word: sum(url_freq.values()) for word, url_freq in index.items()}
