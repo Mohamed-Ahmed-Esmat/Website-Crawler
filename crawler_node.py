@@ -44,6 +44,7 @@ TAG_ERROR_REPORT = 999
 
 # Redis key for set of crawled URLs
 REDIS_CRAWLED_URLS_SET = "crawled_urls"
+REDIS_CRAWL_RESULTS_HASH = "crawl_results"
 
 # Google Cloud project and subscription details
 PROJECT_ID = "spheric-arcadia-457314-c8"  # Replace with your actual project ID
@@ -113,8 +114,8 @@ def extract_content(url, html_content):
         return [], f"Error extracting content: {e}"
 
 def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=1):
+    global r
     all_new_urls = []
-    indexer_rank = 2
     
     total_urls = len(urls_batch)
     processed_urls = 0
@@ -124,45 +125,61 @@ def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=
             processed_urls += 1
             logging.info(f"Crawler {rank} processing URL: {url} (depth {current_depth}/{max_depth}) - Progress: {processed_urls}/{total_urls}")
             
-            if r.sismember(REDIS_CRAWLED_URLS_SET, hash_url(url)):
+            url_hash = hash_url(url)
+
+            if r.sismember(REDIS_CRAWLED_URLS_SET, url_hash):
                 logging.info(f"URL {url} has already been crawled. Skipping.")
-                continue
+                cached_results_json = r.hget(REDIS_CRAWL_RESULTS_HASH, url_hash)
+                cached_results = json.loads(cached_results_json)
+                extracted_urls = cached_results.get('extracted_urls', [])
+                extracted_text = cached_results.get('extracted_text', '')
+                logging.info(f"Retrieved cached results for {url}, found {len(extracted_urls)} URLs")
+            else:
             
-            if not check_robots_txt(url):
-                error_msg = f"Crawling disallowed by robots.txt for {url}"
-                logging.warning(error_msg)
-                comm.send({
-                    "status": STATUS_ERROR, 
-                    "url": url, 
-                    "error": error_msg,
-                    "progress": {
-                        "current": processed_urls,
-                        "total": total_urls
-                    }
-                }, dest=0, tag=TAG_ERROR_REPORT)
-                continue
+                if not check_robots_txt(url):
+                    error_msg = f"Crawling disallowed by robots.txt for {url}"
+                    logging.warning(error_msg)
+                    comm.send({
+                        "status": STATUS_ERROR, 
+                        "url": url, 
+                        "error": error_msg,
+                        "progress": {
+                            "current": processed_urls,
+                            "total": total_urls
+                        }
+                    }, dest=0, tag=TAG_ERROR_REPORT)
+                    continue
+                    
+                success, content = fetch_url(url, session)
                 
-            success, content = fetch_url(url, session)
-            
-            if not success:
-                error_msg = f"Failed to fetch {url}: {content}"
-                logging.error(error_msg)
-                comm.send({
-                    "status": STATUS_ERROR, 
-                    "url": url, 
-                    "error": error_msg,
-                    "progress": {
-                        "current": processed_urls,
-                        "total": total_urls
-                    }
-                }, dest=0, tag=TAG_ERROR_REPORT)
-                continue
-            
-            extracted_urls, extracted_text = extract_content(url, content)
-            
-            logging.info(f"Crawler {rank} crawled {url}, extracted {len(extracted_urls)} URLs (depth {current_depth}/{max_depth})")
-            
-            time.sleep(1)
+                if not success:
+                    error_msg = f"Failed to fetch {url}: {content}"
+                    logging.error(error_msg)
+                    comm.send({
+                        "status": STATUS_ERROR, 
+                        "url": url, 
+                        "error": error_msg,
+                        "progress": {
+                            "current": processed_urls,
+                            "total": total_urls
+                        }
+                    }, dest=0, tag=TAG_ERROR_REPORT)
+                    continue
+                
+                extracted_urls, extracted_text = extract_content(url, content)
+
+                crawl_results = {
+                'extracted_urls': extracted_urls,
+                'extracted_text': extracted_text,
+                'crawl_timestamp': datetime.now().isoformat()
+                }
+
+                r.sadd(REDIS_CRAWLED_URLS_SET, hash_url(url))
+                r.hset(REDIS_CRAWL_RESULTS_HASH, url_hash, json.dumps(crawl_results))
+                
+                logging.info(f"Crawler {rank} crawled {url}, extracted {len(extracted_urls)} URLs (depth {current_depth}/{max_depth})")
+                
+                time.sleep(1)
             
             page_data = {
                 'url': url,
@@ -178,8 +195,6 @@ def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=
             
             if current_depth <= max_depth:
                 all_new_urls.extend(extracted_urls)
-            
-            r.sadd(REDIS_CRAWLED_URLS_SET, hash_url(url))
                 
             comm.send({
                 "status": STATUS_WORKING,
@@ -283,6 +298,7 @@ def crawler_process():
     global comm, rank, r
 
     r.delete(REDIS_CRAWLED_URLS_SET)
+    r.delete(REDIS_CRAWL_RESULTS_HASH)
     
     logging.info(f"Crawler node started with rank {rank} of {size}")
     
