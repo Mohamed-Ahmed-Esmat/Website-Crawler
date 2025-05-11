@@ -83,14 +83,15 @@ def handle_message(msg):
             progress_point = None
 
             while True:
+                logging.info(f"🌀 Transitioning to state: {state}")
                 if state == "IDLE":
                     state, data = IndexerStates.idle_state(comm)
                 elif state == "Receiving_Data":
-                    state, data = IndexerStates.receiving_data_state(data, progress_point, rank)
+                    state, data = IndexerStates.receiving_data_state(data, progress_point)
                 elif state == "Parsing":
-                    state, data = IndexerStates.parsing_state(data, progress_point, rank)
+                    state, data = IndexerStates.parsing_state(data, progress_point)
                 elif state == "Indexing":
-                    state, data = IndexerStates.indexing_state(data, progress_point, rank)
+                    state, data = IndexerStates.indexing_state(data, progress_point)
                 elif state == "Ready_For_Querying":
                     state, data = IndexerStates.ready_for_querying_state(comm)
                 elif state == "EXIT":
@@ -138,5 +139,5 @@ def indexer_node():
                 logging.warning(f"❌ Requested content not found in DB: {url}")
         time.sleep(0.2)
 
-if __name__ == "_main_":
+if __name__ == "__main__":
     indexer_node()
