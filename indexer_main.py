@@ -91,7 +91,12 @@ def handle_message(msg):
                     state, data = IndexerStates.indexing_state(data, progress_point)
                 elif state == "Ready_For_Querying":
                     state, data = IndexerStates.ready_for_querying_state(comm)
+                elif state == "Recovery":
+                    state, data = IndexerStates.recovery_state(data, progress_point)
                 elif state == "EXIT":
+                    break
+                if state is None:
+                    logging.error("State machine returned None state. Breaking loop.")
                     break
                 progress_point = None
         except Exception as e:

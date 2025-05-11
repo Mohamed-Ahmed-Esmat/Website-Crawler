@@ -19,6 +19,8 @@ except socket.gaierror:
     ip_address_indexer = "unknown-ip-indexer"
 
 TAG_INDEXER_HEARTBEAT = 97 # Added: New tag for indexer heartbeat
+TAG_INDEXER_SEARCH_QUERY = 20 # Master to Indexer for search query
+TAG_INDEXER_SEARCH_RESULTS = 21 # Indexer to Master for search results
 
 class IndexerStates:
     last_heartbeat = time.time()
@@ -46,10 +48,78 @@ class IndexerStates:
             if not page_data:
                 logging.info("Shutdown signal received. Exiting.")
                 return "EXIT", None
-            return "Receiving_Data", page_data
-        else:
-            time.sleep(0.5)
-            return "IDLE", None
+            return "Receiving_Data", 
+
+        # Check for search query messages from master
+        if comm.iprobe(source=MPI.ANY_SOURCE, tag=TAG_INDEXER_SEARCH_QUERY):
+            search_request = comm.recv(source=MPI.ANY_SOURCE, tag=TAG_INDEXER_SEARCH_QUERY)
+            logging.info(f"Received search query from master: {search_request}")
+            
+            query_text = search_request.get("query", "")
+            search_type = search_request.get("search_type", "keyword")
+            
+            if query_text:
+                # Process search query and return results to master
+                results = IndexerStates.perform_search(query_text, search_type)
+                source_rank = MPI.Status().Get_source()
+                comm.send(results, dest=0, tag=TAG_INDEXER_SEARCH_RESULTS)
+                logging.info(f"Sent search results for '{query_text}' to master: {len(results)} URLs found")
+                store_search_query(query_text)  # Store the query in history
+            else:
+                comm.send([], dest=0, tag=TAG_INDEXER_SEARCH_RESULTS)
+                logging.warning("Empty search query received from master")
+        
+        
+        time.sleep(0.5)
+        return "IDLE", None
+    
+    @staticmethod
+    def perform_search(query_text, search_type="fuzzy"):
+        """
+        Perform a search based on the query and search type.
+        Returns a list of URLs that match the search criteria.
+        """
+        logging.info(f"Performing {search_type} search for: '{query_text}'")
+        try:
+            client = MongoClient("mongodb://localhost:27017/")
+            db = client["search_database"]
+            pages_collection = db["indexed_pages"]
+            
+            results = []
+            
+            if search_type == "keyword":
+                # Simple keyword search in MongoDB
+                query_regex = {"content": {"$regex": re.escape(query_text), "$options": "i"}}
+                matching_pages = pages_collection.find(query_regex, {"url": 1, "_id": 0})
+                results = [page["url"] for page in matching_pages]
+                
+            elif search_type == "fuzzy":
+                # Implement a simple fuzzy search by looking for parts of the query
+                terms = query_text.split()
+                if terms:
+                    # For each term, find documents that contain it
+                    term_results = []
+                    for term in terms:
+                        if len(term) > 3:  # Only consider terms with at least 4 chars for fuzzy matching
+                            # Match if the content contains at least part of the term
+                            part_regex = {"content": {"$regex": re.escape(term[:-1]), "$options": "i"}}
+                            matching_pages = pages_collection.find(part_regex, {"url": 1, "_id": 0})
+                            term_results.extend([page["url"] for page in matching_pages])
+                    
+                    # Count occurrences and sort by frequency
+                    from collections import Counter
+                    results = [url for url, _ in Counter(term_results).most_common()]
+            
+            # Limit results to prevent overwhelming the system
+            results = results[:100] if len(results) > 100 else results
+            
+            logging.info(f"Search for '{query_text}' returned {len(results)} results")
+            return results
+            
+        except Exception as e:
+            logging.error(f"Error during search: {e}")
+            return []
+
 
     @staticmethod
     def receiving_data_state(page_data, progress_point=None):
@@ -167,43 +237,29 @@ class IndexerStates:
                 logging.error("Index file not found. Cannot perform queries.")
                 return "IDLE", None
 
-            with open("simple_index.pkl", "rb") as f:
-                index = pickle.load(f)
+            # Check for new crawler data
+            if comm.iprobe(source=MPI.ANY_SOURCE, tag=2):
+                page_data = comm.recv(source=MPI.ANY_SOURCE, tag=2)
+                if page_data:
+                    logging.info("New crawler data received! Switching to Receiving_Data...")
+                    return "Receiving_Data", page_data
 
-            print("\n[Indexer] Ready for Queries! Type a keyword (supports prefix search) or 'exit' to stop.")
-
-            while True:
-                if comm.iprobe(source=MPI.ANY_SOURCE, tag=2):
-                    page_data = comm.recv(source=MPI.ANY_SOURCE, tag=2)
-                    if page_data:
-                        logging.info("New crawler data received! Switching to Receiving_Data...")
-                        return "Receiving_Data", page_data
-
-                query = input("Enter keyword (or 'exit' to stop): ").strip().lower()
-                if query == "exit":
-                    break
-                elif query:
-                    # Show recent history suggestions (pinky suggestions)
-                    recent_history = get_search_history(query)
-                    if recent_history:
-                        print("\n🩷 Previously searched:")
-                        for entry in recent_history:
-                            print(f"   🔁 {entry['query']} (last: {entry.get('last_searched')})")
-
-                    # Show autocomplete suggestions
-                    IndexerSearch.suggest_autocomplete_prefix(query)
-
-                    # Fuzzy search if no match found
-                    IndexerSearch.search_stemmed_query(query)
-
-                    # Trigger fuzzy search if no stemmed match
-                    IndexerSearch.fuzzy_query_search(query)
-
-                    # Store query in history
-                    store_search_query(query)
-
+            # Don't block on input() - just return to IDLE where we'll handle search requests
+            logging.info("Ready for search queries - returning to IDLE state to handle master requests")
             return "IDLE", None
 
         except Exception as e:
             logging.error(f"Error during querying: {e}")
             return "Recovery", {"original_state": "Ready_For_Querying", "data": None}
+        
+    @staticmethod
+    def recovery_state(data, progress_point=None):
+        logging.info("State: RECOVERY - Attempting to recover from error...")
+        
+        if isinstance(data, dict) and "original_state" in data:
+            original_state = data.get("original_state")
+            logging.info(f"Recovering from error in state: {original_state}")
+        
+        time.sleep(1)  
+        return "IDLE", None
+
