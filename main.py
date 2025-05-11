@@ -39,7 +39,7 @@ def main():
         print(f"Error: Not enough processes. Need at least 3, but got {size}.")
         MPI.Finalize()
         return
-    if size == 5:
+    if size == 6:
         # Determine role based on rank
         if rank == 0:
             node_type = "Master"
@@ -47,6 +47,13 @@ def main():
             # Import master module and run master process
             from master_node import master_process
             master_process()
+        
+        elif rank == 1:  # server node
+            node_type = "Server"
+            logging.info(f"Process {rank} starting as Server")
+            # Import server module and run server process
+            from server import start_server
+            start_server()
         
         elif rank == size - 1:  # Last rank is the indexer
             node_type = "Indexer"
@@ -77,11 +84,11 @@ def main():
             from master_node import master_process
             master_process()
 
-        #elif rank == 1:  # server node
-        #    node_type = "Server"
-        #    logging.info(f"Process {rank} starting as Server")
-        #    from server import start_server
-        #    start_server()
+        elif rank == 1:  # server node
+            node_type = "Server"
+            logging.info(f"Process {rank} starting as Server")
+            from server import start_server
+            start_server()
 
         elif rank == size - 1:  # Last rank is the indexer
             node_type = "Indexer"
