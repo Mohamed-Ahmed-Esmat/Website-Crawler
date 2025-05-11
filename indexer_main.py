@@ -6,11 +6,11 @@ import time
 from pymongo import MongoClient
 import os
 import subprocess
-import pysolr
 import queue
 import threading
 from google.cloud import storage, pubsub_v1
 from Indexer_States import IndexerStates
+from concurrent.futures import ThreadPoolExecutor
 
 hostname_indexer = socket.gethostname()
 try:
@@ -21,13 +21,9 @@ except socket.gaierror:
 
 SOLR_URL = "http://10.10.0.43:8983/solr/"
 
-# Flow control: single queue, single worker thread
-message_queue = queue.Queue()
-flow_lock = threading.Lock()
-
 PROJECT_ID = "spheric-arcadia-457314-c8"
 SUBSCRIPTION_NAME = "indexer-sub"
-
+CONTENT_TOPIC_NAME = "crawler-indexer"
 
 comm = MPI.COMM_WORLD
 size = comm.Get_size()
@@ -40,9 +36,9 @@ except:
 
 logging.basicConfig(
     level=logging.INFO,
-    format=f'%(asctime)s - {ip_address} - Indexer - %(levelname)s - %(message)s',
+    format=f'%(asctime)s - {ip_address_indexer} - Indexer - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler(f"indexer_{ip_address}.log"),
+        logging.FileHandler(f"indexer_{ip_address_indexer}.log"),
         logging.StreamHandler()
     ]
 )
@@ -73,115 +69,183 @@ def restore_from_gcs(bucket_name, gcs_file_path):
     except Exception as e:
         logging.error(f"❌ Restore failed: {e}")
 
-def handle_message(msg):
-    msg.ack()
-    with flow_lock:  # Flow control: wait till current task is done
-        try:
-            logging.info("✅ Indexer received new crawled content")
-            content_data = json.loads(msg.data.decode("utf-8"))
+# Global executor for Pub/Sub message handling tasks
+# Max workers can be tuned. Too many might thrash DB/Solr if they are bottlenecks.
+# Too few might not utilize CPU if tasks are I/O bound and release GIL.
+pubsub_task_executor = ThreadPoolExecutor(max_workers=os.cpu_count() or 1) # Default to CPU count or 1
 
-            # Feed the state machine manually
-            state = "Receiving_Data"
-            data = content_data
-            progress_point = None
+def handle_pubsub_message(msg, FSM_state_machine_runner_comm_ref, FSM_state_machine_runner_executor_ref):
+    """Callback for Pub/Sub messages. Offloads processing to the FSM runner if needed or directly to states."""
+    try:
+        msg.ack() # Acknowledge message immediately as we are about to process it (or offload)
+        logging.info("Indexer: Received new crawled content from Pub/Sub.")
+        content_data = json.loads(msg.data.decode("utf-8"))
 
-            
-            logging.info(f"🌀 Transitioning to state: {state}")
-            if state == "IDLE":
-                state, data = IndexerStates.idle_state(comm)
-            elif state == "Receiving_Data":
-                state, data = IndexerStates.receiving_data_state(data, progress_point)
-            elif state == "Parsing":
-                state, data = IndexerStates.parsing_state(data, progress_point)
-            elif state == "Indexing":
-                state, data = IndexerStates.indexing_state(data, progress_point)
-            elif state == "Ready_For_Querying":
-                state, data = IndexerStates.ready_for_querying_state(comm)
-            elif state == "Recovery":
-                state, data = IndexerStates.recovery_state(data, progress_point)
-            progress_point = None
-        except Exception as e:
-            logging.error(f"⚠️ Error in indexing flow: {e}")
+        # The main FSM loop will pick this up if we signal it through an MPI message to self,
+        # or if we directly invoke the state transition here if thread-safe.
+        # For simplicity, if the FSM is primarily driven by MPI checks in idle_state,
+        # we can directly transition here, assuming states are re-entrant or handle data well.
+        # However, the FSM in indexer_node runs a loop. We need to feed data to it.
+        # One way: Send an MPI message to itself with the data.
+        # This allows the main FSM loop in indexer_node to pick it up via its comm.iprobe(tag=2).
+        
+        # Let's assume `comm` (FSM_state_machine_runner_comm_ref) is the MPI.COMM_WORLD object
+        # and the indexer's own rank can receive messages sent to itself.
+        rank_self = FSM_state_machine_runner_comm_ref.Get_rank()
+        FSM_state_machine_runner_comm_ref.send(content_data, dest=rank_self, tag=2) # Send to self on tag 2
+        logging.info(f"Pub/Sub Handler: Sent content for {content_data.get('url')} to own FSM via MPI tag 2.")
+
+    except Exception as e:
+        logging.error(f"⚠️ Error in Pub/Sub handle_pubsub_message: {e}", exc_info=True)
+        # msg.nack() # Optional: Nack if processing truly failed and want Pub/Sub to redeliver
 
 def indexer_node():
-    logging.info(f"Indexer node started with size of {size}")
+    global comm # Ensure comm is the global MPI.COMM_WORLD
+    node_rank = comm.Get_rank()
+    node_size = comm.Get_size()
+    logging.info(f"Indexer node (Rank {node_rank}/{node_size}) started. IP: {ip_address_indexer}")
 
-    rank_indexer = comm.Get_rank() # Get rank within the method
+    # ThreadPoolExecutor for MPI tasks (like search) and for FSM background tasks
+    # This single executor can be used by IndexerStates methods.
+    # Max workers for MPI tasks + FSM tasks. Let's use a slightly larger pool if they are distinct.
+    # If IndexerStates methods create their own threads, this might not be needed here for them.
+    # Based on previous Indexer_States changes, it expects an executor to be passed.
+    shared_executor = ThreadPoolExecutor(max_workers= (os.cpu_count() or 1) + 2) # e.g., CPU cores + 2 for MPI tasks
+
+    # Initial heartbeat to master
     heartbeat_data = {
         "node_type": "indexer",
-        "rank": rank_indexer,
+        "rank": node_rank,
         "ip_address": ip_address_indexer,
         "timestamp": time.time()
     }
-    comm.send(heartbeat_data, dest=0, tag=97)
+    try:
+        comm.send(heartbeat_data, dest=0, tag=97) # TAG_INDEXER_HEARTBEAT = 97
+        logging.info(f"Sent initial heartbeat to Master: {heartbeat_data}")
+    except MPI.Exception as e:
+        logging.error(f"Failed to send initial heartbeat: {e}")
 
+    # --- Pub/Sub Setup --- #
+    subscriber = None
+    streaming_pull_future = None
     try:
         subscriber = pubsub_v1.SubscriberClient()
-        topic_path = subscriber.topic_path(PROJECT_ID, "crawler-indexer")
-        subscription_path = subscriber.subscription_path(PROJECT_ID, SUBSCRIPTION_NAME)
+        topic_path = subscriber.topic_path(PROJECT_ID, CONTENT_TOPIC_NAME) # crawler-indexer topic
+        subscription_path = subscriber.subscription_path(PROJECT_ID, SUBSCRIPTION_NAME) # indexer-sub
         
-        # Try to delete the old subscription if it exists
         try:
             subscriber.delete_subscription(subscription=subscription_path)
-            logging.info(f"❌ Deleted old subscription: {SUBSCRIPTION_NAME}")
-        except Exception as e:
-            logging.error(f"❌ Failed to delete subscription (might not exist): {e}")
+            logging.info(f"Deleted old Pub/Sub subscription: {SUBSCRIPTION_NAME}")
+        except Exception: # Catch more specific exceptions if possible, e.g., NotFound
+            logging.debug(f"Failed to delete Pub/Sub subscription {SUBSCRIPTION_NAME} (might not exist or other error).")
         
-        # Create a new subscription to the topic
-        try:
-            subscriber.create_subscription(
-                name=subscription_path, 
-                topic=topic_path
-            )
-            logging.info(f"✅ Created new subscription: {SUBSCRIPTION_NAME}")
-        except Exception as e:
-            logging.error(f"❌ Failed to create subscription: {e}")
+        subscriber.create_subscription(name=subscription_path, topic=topic_path)
+        logging.info(f"Created new Pub/Sub subscription: {SUBSCRIPTION_NAME} to topic {CONTENT_TOPIC_NAME}")
             
-    except Exception as e:
-        logging.error(f"❌ Failed during subscription setup: {e}")
-    
-    # Create a new subscriber client for the subscription
-    subscriber = pubsub_v1.SubscriberClient()
-    subscription_path = subscriber.subscription_path(PROJECT_ID, SUBSCRIPTION_NAME)
-    flow_control = pubsub_v1.types.FlowControl(max_messages=1)
+        flow_control = pubsub_v1.types.FlowControl(max_messages=5) # Allow a few messages in buffer
+        
+        # Curry comm and shared_executor into the callback
+        # The Pub/Sub callback will run in a thread managed by the subscriber client.
+        # It needs `comm` to send data to the main FSM loop via MPI self-send.
+        # It doesn't directly use the `shared_executor` itself for its immediate task (which is MPI self-send).
+        # The FSM states, when processing that MPI message, will use `shared_executor`.
+        wrapped_callback = lambda msg: handle_pubsub_message(msg, comm, shared_executor)
 
-    # Subscribe to the topic
-    try:
-        # The key issue is here - we need to store this future and keep it alive
-        streaming_pull_future = subscriber.subscribe(
-            subscription_path, 
-            callback=handle_message, 
-            flow_control=flow_control
-        )
-        logging.info(f"📥 Indexer subscribed to topic: {SUBSCRIPTION_NAME}")
+        streaming_pull_future = subscriber.subscribe(subscription_path, callback=wrapped_callback, flow_control=flow_control)
+        logging.info(f"📥 Indexer subscribed to Pub/Sub topic: {CONTENT_TOPIC_NAME} via subscription {SUBSCRIPTION_NAME}")
         
-        # Keep MPI listener alive to respond to master and also keep the subscription active
-        while True:
-            if comm.iprobe(source=MPI.ANY_SOURCE, tag=2):
-                request = comm.recv(source=MPI.ANY_SOURCE, tag=2)
-                url = request.get("url")
-                client = MongoClient("mongodb://localhost:27017/")
-                page = client["search_database"]["indexed_pages"].find_one({"url": url})
-                if page:
-                    comm.send(page, dest=0, tag=2)
-                    logging.info(f"📦 Sent indexed content of {url} to master via MPI")
-                else:
-                    comm.send({"error": "not_found"}, dest=0, tag=2)
-                    logging.warning(f"❌ Requested content not found in DB: {url}")
-            time.sleep(0.2)
-            
     except Exception as e:
-        logging.error(f"❌ Failed to subscribe to topic: {e}")
-        # Make sure to close the subscriber client
-        if 'streaming_pull_future' in locals():
-            streaming_pull_future.cancel()
+        logging.error(f"❌ Failed during Pub/Sub subscription setup: {e}", exc_info=True)
+        # Fall through to FSM loop even if Pub/Sub fails, it can still do MPI tasks like search.
+    # --- End Pub/Sub Setup --- #
+
+    # --- Finite State Machine (FSM) Loop --- #
+    current_FSM_state = "IDLE"
+    data_for_FSM_state = None
+    running = True
+
+    logging.info("Starting Indexer FSM loop...")
+    while running:
+        try:
+            if current_FSM_state == "IDLE":
+                current_FSM_state, data_for_FSM_state = IndexerStates.idle_state(comm, shared_executor)
+            elif current_FSM_state == "Receiving_Data":
+                # No executor needed for receiving_data_state as it's quick validation
+                current_FSM_state, data_for_FSM_state = IndexerStates.receiving_data_state(data_for_FSM_state)
+            elif current_FSM_state == "Parsing":
+                # No executor needed for parsing_state
+                current_FSM_state, data_for_FSM_state = IndexerStates.parsing_state(data_for_FSM_state)
+            elif current_FSM_state == "Indexing":
+                current_FSM_state, data_for_FSM_state = IndexerStates.indexing_state(data_for_FSM_state, shared_executor)
+            elif current_FSM_state == "Ready_For_Querying": # This state is mostly a passthrough now
+                current_FSM_state, data_for_FSM_state = IndexerStates.ready_for_querying_state(comm, shared_executor)
+            elif current_FSM_state == "Recovery":
+                current_FSM_state, data_for_FSM_state = IndexerStates.recovery_state(data_for_FSM_state)
+            elif current_FSM_state == "EXIT":
+                logging.info("EXIT state reached. Shutting down indexer FSM loop.")
+                running = False
+                break
+            else:
+                logging.error(f"Unknown FSM state: {current_FSM_state}. Resetting to IDLE.")
+                current_FSM_state = "IDLE"
+                data_for_FSM_state = None
+                time.sleep(1) # Pause if in unknown state
+            
+            # Small delay to prevent tight loop if all states return immediately
+            # time.sleep(0.01) # IndexerStates.idle_state already has a sleep
+
+        except KeyboardInterrupt:
+            logging.info("KeyboardInterrupt received in FSM loop. Shutting down...")
+            running = False
+            break
+        except Exception as e:
+            logging.error(f"Critical error in Indexer FSM loop: {e}", exc_info=True)
+            current_FSM_state = "Recovery" # Attempt to recover
+            data_for_FSM_state = {"original_state": current_FSM_state, "error": str(e)} # Pass error info to recovery
+            time.sleep(1) # Pause before retrying FSM from recovery
+    # --- End FSM Loop --- #
+
+    logging.info("Indexer FSM loop has exited.")
+
+    if streaming_pull_future:
+        logging.info("Cancelling Pub/Sub streaming pull...")
+        streaming_pull_future.cancel() # Signal the subscriber to stop
+        try:
+            streaming_pull_future.result(timeout=30) # Wait for cancellation to complete
+            logging.info("Pub/Sub streaming pull cancelled.")
+        except TimeoutError:
+            logging.warning("Timeout waiting for Pub/Sub pull to cancel.")
+        except Exception as e:
+            logging.error(f"Error during Pub/Sub future cancellation: {e}")
+
+    if subscriber:
+        logging.info("Closing Pub/Sub subscriber client...")
         subscriber.close()
+        logging.info("Pub/Sub subscriber client closed.")
+
+    logging.info(f"Shutting down shared ThreadPoolExecutor...")
+    shared_executor.shutdown(wait=True)
+    logging.info("Shared ThreadPoolExecutor shut down.")
+    
+    # Restore MongoDB backups (moved to start as per original code, but could also be a shutdown task if needed)
+    # restore_from_gcs("bucket-dist", "mongobackup/search_database")
+    # restore_from_gcs("bucket-dist", "mongobackup/indexer")
+
+    logging.info(f"Indexer node (Rank {node_rank}) process finished.")
 
 if __name__ == "__main__":
-
-    # Restore MongoDB backups
-    restore_from_gcs("bucket-dist", "mongobackup/search_database")
-    restore_from_gcs("bucket-dist", "mongobackup/indexer")
-
+    # Restore GCS is typically done once at startup, not repeatedly if main is called multiple times.
+    # Assuming main() from main.py calls this indexer_node() once.
+    if MPI.COMM_WORLD.Get_rank() != 0 and MPI.COMM_WORLD.Get_rank() != 1: # Simple check if it's an indexer candidate based on main.py logic
+        restore_from_gcs("bucket-dist", "mongobackup/search_database")
+        restore_from_gcs("bucket-dist", "mongobackup/indexer")
     
-    indexer_node()
+    try:
+        indexer_node()
+    except KeyboardInterrupt:
+        logging.info("Indexer node shutting down due to KeyboardInterrupt in __main__.")
+    except Exception as e:
+        logging.error(f"Unhandled exception in indexer_node __main__: {e}", exc_info=True)
+    finally:
+        logging.info("Indexer __main__ finally block reached.")
+        # MPI.Finalize() is handled by the main.py entry point
