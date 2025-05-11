@@ -76,50 +76,94 @@ class IndexerStates:
     
     @staticmethod
     def perform_search(query_text, search_type="fuzzy"):
-        """
-        Perform a search based on the query and search type.
-        Returns a list of URLs that match the search criteria.
-        """
         logging.info(f"Performing {search_type} search for: '{query_text}'")
         try:
             from pymongo import MongoClient
             client = MongoClient("mongodb://localhost:27017/")
             db = client["search_database"]
             pages_collection = db["indexed_pages"]
-            
+
             results = []
-            
+
             if search_type == "keyword":
-                # Simple keyword search in MongoDB
-                query_regex = {"content": {"$regex": re.escape(query_text), "$options": "i"}}
-                matching_pages = pages_collection.find(query_regex, {"url": 1, "_id": 0})
-                results = [page["url"] for page in matching_pages]
-                
+                # Enhanced keyword search in MongoDB - use case-insensitive contains
+                query_terms = query_text.lower().split()
+                all_results = []
+
+                # Search for each term individually to maximize results
+                for term in query_terms:
+                    if len(term) >= 2:  # Skip very short terms
+                        query_regex = {"content": {"$regex": re.escape(term), "$options": "i"}}
+                        matching_pages = pages_collection.find(query_regex, {"url": 1, "_id": 0})
+                        all_results.extend([page["url"] for page in matching_pages])
+
+                # Remove duplicates while preserving order
+                seen = set()
+                results = [url for url in all_results if not (url in seen or seen.add(url))]
+
             elif search_type == "fuzzy":
-                # Implement a simple fuzzy search by looking for parts of the query
-                terms = query_text.split()
-                if terms:
-                    # For each term, find documents that contain it
-                    term_results = []
-                    for term in terms:
-                        if len(term) > 3:  # Only consider terms with at least 4 chars for fuzzy matching
-                            # Match if the content contains at least part of the term
-                            part_regex = {"content": {"$regex": re.escape(term[:-1]), "$options": "i"}}
-                            matching_pages = pages_collection.find(part_regex, {"url": 1, "_id": 0})
-                            term_results.extend([page["url"] for page in matching_pages])
-                    
-                    # Count occurrences and sort by frequency
-                    from collections import Counter
-                    results = [url for url, _ in Counter(term_results).most_common()]
-            
-            # Limit results to prevent overwhelming the system
-            results = results[:100] if len(results) > 100 else results
-            
-            logging.info(f"Search for '{query_text}' returned {len(results)} results")
-            return results
-            
+                # More comprehensive fuzzy search implementation
+                terms = query_text.lower().split()
+                all_results = []
+
+                # Multi-strategy search:
+
+                # 1. Look for full terms first
+                for term in terms:
+                    if len(term) >= 2:  # Consider terms with at least 2 chars
+                        term_regex = {"content": {"$regex": re.escape(term), "$options": "i"}}
+                        matching_pages = pages_collection.find(term_regex, {"url": 1, "_id": 0})
+                        all_results.extend([page["url"] for page in matching_pages])
+
+                # 2. Look for partial matches - the core of fuzzy search
+                for term in terms:
+                    if len(term) > 3:  # For longer terms, consider partial matches
+                        # Take progressively smaller prefixes
+                        for i in range(len(term)-1, max(2, len(term)-3), -1):
+                            prefix = term[:i]
+                            if len(prefix) >= 3:  # Use prefixes of reasonable length
+                                prefix_regex = {"content": {"$regex": "\\b" + re.escape(prefix), "$options": "i"}}
+                                matching_pages = pages_collection.find(prefix_regex, {"url": 1, "_id": 0})
+                                all_results.extend([page["url"] for page in matching_pages])
+
+                # 3. Look for character-drop variations (for typos)
+                for term in terms:
+                    if len(term) > 4:  # Only for longer terms
+                        # Create variations with one character dropped
+                        for i in range(len(term)):
+                            variant = term[:i] + term[i+1:]
+                            if len(variant) >= 3:
+                                variant_regex = {"content": {"$regex": "\\b" + re.escape(variant), "$options": "i"}}
+                                matching_pages = pages_collection.find(variant_regex, {"url": 1, "_id": 0})
+                                all_results.extend([page["url"] for page in matching_pages])
+
+                # Count occurrences to rank results
+                from collections import Counter
+                result_counter = Counter(all_results)
+
+                # Sort by frequency (higher frequency = more relevance)
+                results = [url for url, _ in result_counter.most_common()]
+
+            elif search_type == "wildcard":
+                # Enhanced wildcard search
+                # Convert wildcards to regex
+                regex_pattern = query_text.replace("*", ".*").replace("?", ".")
+                wildcard_regex = {"content": {"$regex": regex_pattern, "$options": "i"}}
+                matching_pages = pages_collection.find(wildcard_regex, {"url": 1, "_id": 0})
+                results = [page["url"] for page in matching_pages]
+
+            # Log the number of results found before limiting
+            total_found = len(results)
+
+            # Increase limit to 500 to return more results
+            max_results = 500
+            limited_results = results[:max_results] if len(results) > max_results else results
+
+            logging.info(f"Search for '{query_text}' found {total_found} total matches, returning {len(limited_results)} results")
+            return limited_results
+
         except Exception as e:
-            logging.error(f"Error during search: {e}")
+            logging.error(f"Error during search: {e}", exc_info=True)
             return []
 
 

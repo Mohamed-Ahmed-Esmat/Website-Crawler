@@ -563,7 +563,7 @@
                         <label for="search_query">
                             <i class="fas fa-keyboard"></i> Search Query
                             <span class="tooltip"
-                                data-tooltip="Examples:&#10;Keyword: machine learning&#10;Phrase: &quot;artificial intelligence&quot;&#10;Fuzzy: progamming (will match 'programming')&#10;Wildcard: py* (will match python, pytest, etc)">
+                                data-tooltip="Keyword: Basic word matching&#10;Fuzzy: Tolerates typos and finds similar terms">
                                 <i class="fas fa-info-circle"></i>
                             </span>
                         </label>
@@ -575,15 +575,13 @@
                         <label for="search_type">
                             <i class="fas fa-filter"></i> Search Type
                             <span class="tooltip"
-                                data-tooltip="Keyword: Basic word matching&#10;Phrase: Exact phrase matching&#10;Fuzzy: Tolerates typos&#10;Wildcard: Use * and ? as wildcards">
+                                data-tooltip="Examples:&#10;Keyword: machine learning&#10;Fuzzy: progamming (will match 'programming')">
                                 <i class="fas fa-info-circle"></i>
                             </span>
                         </label>
                         <select id="search_type" name="search_type">
                             <option value="keyword">Keyword Search</option>
-                            <option value="phrase">Exact Phrase</option>
                             <option value="fuzzy">Fuzzy Search</option>
-                            <option value="wildcard">Wildcard Search</option>
                         </select>
                     </div>
 
