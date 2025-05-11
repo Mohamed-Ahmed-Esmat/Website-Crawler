@@ -6,6 +6,45 @@ from pymongo import MongoClient
 from datetime import datetime
 from google.cloud import storage
 
+def create_solr_core(core_name="indexer_core"):
+    try:
+        # Check if core exists first
+        check_url = f"http://10.10.0.43:8983/solr/admin/cores?action=STATUS&core={core_name}"
+        response = requests.get(check_url)
+        
+        if response.status_code == 200:
+            data = response.json()
+            if core_name in data.get('status', {}):
+                logging.info(f"✅ Solr core '{core_name}' already exists.")
+                return True
+        
+        # Create the core
+        create_url = f"http://10.10.0.43:8983/solr/admin/cores"
+        params = {
+            'action': 'CREATE',
+            'name': core_name,
+            'configSet': '_default'  # Use Solr's default configuration
+        }
+        
+        create_response = requests.get(create_url, params=params)
+        
+        if create_response.status_code == 200:
+            logging.info(f"✅ Created Solr core '{core_name}' successfully.")
+            return True
+        else:
+            logging.error(f"❌ Failed to create Solr core: {create_response.text}")
+            return False
+            
+    except Exception as e:
+        logging.error(f"❌ Error creating Solr core: {e}")
+        return False
+    
+try:
+    create_solr_core()
+except Exception as e:
+    logging.error(f"Error during Solr core creation: {e}")
+
+
 solr = pysolr.Solr('http://10.10.0.43:8983/solr/indexer_core', always_commit=False)
 
 class IndexerSearch:
