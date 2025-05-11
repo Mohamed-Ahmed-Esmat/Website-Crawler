@@ -63,6 +63,7 @@ class IndexerStates:
                 results = IndexerStates.perform_search(query_text, search_type)
                 source_rank = MPI.Status().Get_source()
                 comm.send(results, dest=0, tag=TAG_INDEXER_SEARCH_RESULTS)
+                print(results)
                 logging.info(f"Sent search results for '{query_text}' to master: {len(results)} URLs found")
                 store_search_query(query_text)  # Store the query in history
             else:
