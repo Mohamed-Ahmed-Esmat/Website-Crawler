@@ -4,7 +4,7 @@ import requests
 from pymongo import MongoClient
 from datetime import datetime
 
-solr = pysolr.Solr('http://localhost:8983/solr/indexer_core', always_commit=False)
+solr = pysolr.Solr('http://10.10.0.43:8983/solr/indexer_core', always_commit=False)
 
 class IndexerSearch:
     @staticmethod
