@@ -330,7 +330,10 @@ def crawler_process():
             if current_time - last_heartbeat > 5:
                 comm.send({
                     "status": STATUS_IDLE,
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": datetime.now().isoformat(), 
+                    "rank": rank,
+                    "node_type": "crawler",
+                    "ip_address": ip_address
                 }, dest=0, tag=TAG_HEARTBEAT)
                 last_heartbeat = current_time
                 logging.debug(f"Sent heartbeat to master")
