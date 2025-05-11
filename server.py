@@ -18,7 +18,7 @@ size = comm.Get_size()
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-app = Flask(__name__, template_folder="../templates")
+app = Flask(__name__, template_folder="./templates")
 CORS(app)  
 
 @app.route('/')
