@@ -81,6 +81,7 @@ class IndexerStates:
         """
         logging.info(f"Performing {search_type} search for: '{query_text}'")
         try:
+            from pymongo import MongoClient
             client = MongoClient("mongodb://localhost:27017/")
             db = client["search_database"]
             pages_collection = db["indexed_pages"]
