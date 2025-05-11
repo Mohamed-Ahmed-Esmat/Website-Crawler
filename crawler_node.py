@@ -232,7 +232,7 @@ def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=
     
     if current_depth < max_depth and all_new_urls:
         if current_depth + 1 <= max_depth:
-            comm.send({"urls": all_new_urls, "depth": current_depth + 1}, dest=0, tag=TAG_DISCOVERED_URLS)
+            comm.send({"urls": all_new_urls, "depth": current_depth + 1}, dest=0, tag=TAG_STATUS_UPDATE)
             process_url_batch(all_new_urls, max_depth, comm, rank, session, current_depth + 1)
         else:
             comm.send({"urls": all_new_urls, "depth": current_depth + 1}, dest=0, tag=TAG_DISCOVERED_URLS)
