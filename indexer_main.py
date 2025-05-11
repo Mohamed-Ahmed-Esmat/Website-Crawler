@@ -138,5 +138,5 @@ def indexer_node():
                 logging.warning(f"❌ Requested content not found in DB: {url}")
         time.sleep(0.2)
 
-if _name_ == "_main_":
+if __name__ == "__main__":
     indexer_node()
