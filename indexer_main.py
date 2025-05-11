@@ -85,26 +85,21 @@ def handle_message(msg):
             data = content_data
             progress_point = None
 
-            while True:
-                logging.info(f"🌀 Transitioning to state: {state}")
-                if state == "IDLE":
-                    state, data = IndexerStates.idle_state(comm)
-                elif state == "Receiving_Data":
-                    state, data = IndexerStates.receiving_data_state(data, progress_point)
-                elif state == "Parsing":
-                    state, data = IndexerStates.parsing_state(data, progress_point)
-                elif state == "Indexing":
-                    state, data = IndexerStates.indexing_state(data, progress_point)
-                elif state == "Ready_For_Querying":
-                    state, data = IndexerStates.ready_for_querying_state(comm)
-                elif state == "Recovery":
-                    state, data = IndexerStates.recovery_state(data, progress_point)
-                elif state == "EXIT":
-                    break
-                if state is None:
-                    logging.error("State machine returned None state. Breaking loop.")
-                    break
-                progress_point = None
+            
+            logging.info(f"🌀 Transitioning to state: {state}")
+            if state == "IDLE":
+                state, data = IndexerStates.idle_state(comm)
+            elif state == "Receiving_Data":
+                state, data = IndexerStates.receiving_data_state(data, progress_point)
+            elif state == "Parsing":
+                state, data = IndexerStates.parsing_state(data, progress_point)
+            elif state == "Indexing":
+                state, data = IndexerStates.indexing_state(data, progress_point)
+            elif state == "Ready_For_Querying":
+                state, data = IndexerStates.ready_for_querying_state(comm)
+            elif state == "Recovery":
+                state, data = IndexerStates.recovery_state(data, progress_point)
+            progress_point = None
         except Exception as e:
             logging.error(f"⚠️ Error in indexing flow: {e}")
 
