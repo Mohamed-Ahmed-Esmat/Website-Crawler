@@ -303,6 +303,19 @@ def crawler_process():
 
     r.delete(REDIS_CRAWLED_URLS_SET)
     r.delete(REDIS_CRAWL_RESULTS_HASH)
+
+    
+    comm.send({
+        "status": STATUS_IDLE,
+        "timestamp": datetime.now().isoformat(), 
+        "rank": rank,
+        "node_type": "crawler",
+        "ip_address": ip_address
+    }, dest=0, tag=TAG_HEARTBEAT)
+    last_heartbeat = current_time
+    logging.debug(f"Sent heartbeat to master")
+    
+    time.sleep(0.1)
     
     logging.info(f"Crawler node started with rank {rank} of {size}")
     

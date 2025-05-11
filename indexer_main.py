@@ -12,6 +12,12 @@ import threading
 from google.cloud import storage, pubsub_v1
 from Indexer_States import IndexerStates
 
+hostname_indexer = socket.gethostname()
+try:
+    ip_address_indexer = socket.gethostbyname(hostname_indexer)
+except socket.gaierror:
+    ip_address_indexer = "unknown-ip-indexer"
+
 
 SOLR_URL = "http://10.10.0.43:8983/solr/"
 
@@ -104,6 +110,15 @@ def handle_message(msg):
 
 def indexer_node():
     logging.info(f"Indexer node started with size of {size}")
+
+    rank_indexer = comm.Get_rank() # Get rank within the method
+    heartbeat_data = {
+        "node_type": "indexer",
+        "rank": rank_indexer,
+        "ip_address": ip_address_indexer,
+        "timestamp": time.time()
+    }
+    comm.send(heartbeat_data, dest=0, tag=97)
 
     try:
         subscriber = pubsub_v1.SubscriberClient()
