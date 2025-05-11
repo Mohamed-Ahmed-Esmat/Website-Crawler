@@ -58,7 +58,6 @@ class IndexerStates:
 
     @staticmethod
     def idle_state(comm, executor):
-        logging.info("State: IDLE - Waiting for new task...")
         status = MPI.Status()
         current_time = time.time()
         if current_time - IndexerStates.last_heartbeat >= 10:
