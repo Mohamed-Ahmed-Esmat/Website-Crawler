@@ -12,6 +12,7 @@ from utils import backup_mongodb_and_upload
 import socket
 from concurrent.futures import ThreadPoolExecutor
 import pymongo
+from pymongo import MongoClient
 
 # Added: Get IP for heartbeat
 hostname_indexer = socket.gethostname()
