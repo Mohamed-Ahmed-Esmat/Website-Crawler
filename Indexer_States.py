@@ -26,20 +26,6 @@ class IndexerStates:
     @staticmethod
     def idle_state(comm):
         logging.info("State: IDLE - Waiting for new task...")
-        current_time = time.time()
-        if current_time - IndexerStates.last_heartbeat >= 10:
-            # logging.info("[IDLE] Heartbeat: Indexer is alive and waiting for tasks.") # Replaced by new MPI heartbeat to master
-            
-            rank_indexer = comm.Get_rank() # Get rank within the method
-            heartbeat_data = {
-                "node_type": "indexer",
-                "rank": rank_indexer,
-                "ip_address": ip_address_indexer,
-                "timestamp": time.time()
-            }
-            comm.send(heartbeat_data, dest=0, tag=TAG_INDEXER_HEARTBEAT)
-            logging.info(f"[IDLE] Sent Heartbeat to Master: {heartbeat_data}")
-            IndexerStates.last_heartbeat = current_time
 
         if comm.iprobe(source=MPI.ANY_SOURCE, tag=2):
             page_data = comm.recv(source=MPI.ANY_SOURCE, tag=2)
@@ -153,7 +139,7 @@ class IndexerStates:
             logging.info(f"✔️ Indexing complete for URL: {url}.")
 
 
-            return "Ready_For_Querying", None
+            return "IDLE", None
 
         except Exception as e:
             logging.error(f"Error during indexing: {e}")

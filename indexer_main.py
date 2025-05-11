@@ -22,6 +22,8 @@ flow_lock = threading.Lock()
 PROJECT_ID = "spheric-arcadia-457314-c8"
 SUBSCRIPTION_NAME = "indexer-sub"
 
+TAG_INDEXER_HEARTBEAT = 97 
+
 
 comm = MPI.COMM_WORLD
 size = comm.Get_size()
@@ -139,6 +141,18 @@ def indexer_node():
         
         # Keep MPI listener alive to respond to master and also keep the subscription active
         while True:
+            current_time = time.time()
+            if current_time - last_heartbeat >= 10:                
+                rank_indexer = comm.Get_rank() # Get rank within the method
+                heartbeat_data = {
+                    "node_type": "indexer",
+                    "rank": rank_indexer,
+                    "ip_address": ip_address,
+                    "timestamp": time.time()
+                }
+                comm.send(heartbeat_data, dest=0, tag=TAG_INDEXER_HEARTBEAT)
+                logging.info(f"[IDLE] Sent Heartbeat to Master: {heartbeat_data}")
+                last_heartbeat = current_time
             if comm.iprobe(source=0, tag=20):
                 search_request = comm.recv(source=0, tag=20)
                 logging.info(f"🔍 Received search request from master: {search_request}")
