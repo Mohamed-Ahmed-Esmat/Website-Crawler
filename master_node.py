@@ -28,6 +28,8 @@ TAG_SEARCH = 11
 TAG_NODES_STATUS = 12
 TAG_SHUTDOWN_MASTER = 13 # New tag for graceful shutdown
 TAG_INDEXER_HEARTBEAT = 97 # Added: For Indexer Heartbeats
+TAG_INDEXER_SEARCH_QUERY = 20 # Master to Indexer for search query
+TAG_INDEXER_SEARCH_RESULTS = 21 # Indexer to Master for search results
 
 NODE_HEARTBEAT_TIMEOUT = 60 # Seconds. If no heartbeat received within this time, node is considered inactive.
 node_info_map = {} # MODULE-LEVEL GLOBAL: Stores details of connected nodes
@@ -103,14 +105,44 @@ def handle_server_requests(comm, status):
 
         elif tag == TAG_SEARCH:
             # Handle search request directly
-            data = comm.recv(source=source_rank, tag=TAG_SEARCH)
-            query = data.get("query", "")
+            data = comm.recv(source=source_rank, tag=TAG_SEARCH) # source_rank is server (rank 1)
+            query_text = data.get("query", "")
             search_type = data.get("search_type", "keyword")
-            logging.info(f"Master: Received search request from server (rank {source_rank}): query='{query}', type='{search_type}'")
-            # TODO: Implement actual search logic here
-            resulted_urls = [f"http://example.com/search/{query}/1", f"http://example.com/search/{query}/2"] # Placeholder
-            comm.send(resulted_urls, dest=source_rank, tag=TAG_SEARCH)
-            logging.info(f"Master: Sent search results for '{query}' back to server (rank {source_rank})")
+            logging.info(f"Master: Received search request from server (rank {source_rank}): query='{query_text}', type='{search_type}'")
+
+            active_indexer_rank = None
+            # Find an active indexer from the global node_info_map
+            for node_r, details in node_info_map.items():
+                if details.get("type") == "indexer" and details.get("active") is True:
+                    active_indexer_rank = node_r
+                    break # Found one, use it
+            
+            resulted_urls = [] # Default to empty list
+
+            if active_indexer_rank is not None:
+                logging.info(f"Master: Forwarding search query '{query_text}' to active Indexer Rank {active_indexer_rank}")
+                search_payload = {"query": query_text, "search_type": search_type}
+                try:
+                    comm.send(search_payload, dest=active_indexer_rank, tag=TAG_INDEXER_SEARCH_QUERY)
+                    
+                    # Assume indexer will reply with a list of URLs
+                    # This is a blocking receive. Consider adding a timeout or non-blocking mechanism for robustness in a full system.
+                    logging.info(f"Master: Waiting for search results from Indexer Rank {active_indexer_rank}...")
+                    resulted_urls = comm.recv(source=active_indexer_rank, tag=TAG_INDEXER_SEARCH_RESULTS)
+                    if not isinstance(resulted_urls, list):
+                        logging.warning(f"Master: Received malformed search results from Indexer {active_indexer_rank} (expected list, got {type(resulted_urls)}). Defaulting to empty list.")
+                        resulted_urls = []
+                    else:
+                        logging.info(f"Master: Received {len(resulted_urls)} search results from Indexer Rank {active_indexer_rank}.")
+                except Exception as e:
+                    logging.error(f"Master: Error communicating with Indexer Rank {active_indexer_rank} for search: {e}")
+                    resulted_urls = [] # Send empty list on error
+            else:
+                logging.warning("Master: No active indexer found to handle search query.")
+                # resulted_urls is already an empty list
+
+            comm.send(resulted_urls, dest=source_rank, tag=TAG_SEARCH) # Send results (or empty list) back to server
+            logging.info(f"Master: Sent {len(resulted_urls)} search results for '{query_text}' back to server (rank {source_rank})")
 
         elif tag == TAG_NODES_STATUS:
             # Handle nodes status request directly
