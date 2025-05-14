@@ -108,7 +108,7 @@ def indexer_node():
         # Try to delete the old subscription if it exists
         try:
             subscriber.delete_subscription(subscription=subscription_path)
-            logging.info(f"❌ Deleted old subscription: {SUBSCRIPTION_NAME}")
+            logging.info(f"Deleted old subscription: {SUBSCRIPTION_NAME}")
         except Exception as e:
             logging.error(f"❌ Failed to delete subscription (might not exist): {e}")
         
