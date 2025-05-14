@@ -139,11 +139,11 @@ def indexer_node():
         )
         logging.info(f"📥 Indexer subscribed to topic: {SUBSCRIPTION_NAME}")
         
+        last_heartbeat = 0
         # Keep MPI listener alive to respond to master and also keep the subscription active
         while True:
-            last_heartbeat = 0
             current_time = time.time()
-            if current_time - last_heartbeat >= 10:                
+            if current_time - last_heartbeat >= 5:                
                 rank_indexer = comm.Get_rank() # Get rank within the method
                 heartbeat_data = {
                     "node_type": "indexer",
