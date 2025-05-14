@@ -152,7 +152,7 @@ def indexer_node():
                     "timestamp": time.time()
                 }
                 comm.send(heartbeat_data, dest=0, tag=TAG_INDEXER_HEARTBEAT)
-                logging.info(f"[IDLE] Sent Heartbeat to Master: {heartbeat_data}")
+                logging.info(f"Sent Heartbeat to Master: {heartbeat_data.get('node_type')} {heartbeat_data.get('rank')}")
                 last_heartbeat = current_time
             if comm.iprobe(source=0, tag=20):
                 search_request = comm.recv(source=0, tag=20)

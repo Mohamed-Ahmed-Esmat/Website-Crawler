@@ -67,9 +67,9 @@ class IndexerStates:
             from pymongo import MongoClient
             client = MongoClient("mongodb://localhost:27017/")
             pages_collection = client["search_database"]["indexed_pages"]
-            #if pages_collection.find_one({"url_hash": url_hash}):
-            #    logging.info(f"🔁 URL already indexed: {url} → Skipping to re-publish only.")
-            #    return "IDLE", None
+            if pages_collection.find_one({"url_hash": url_hash}):
+                logging.info(f"🔁 URL already indexed: {url} → Skipping to re-publish only.")
+                return "IDLE", None
 
             # Not indexed → proceed
             return "Parsing", {"url": url, "content": content}
@@ -155,6 +155,9 @@ class IndexerStates:
             if search_type == "fuzzy":
                 # Fuzzy search for typos/variations
                 result = IndexerSearch.fuzzy_query_search(query)
+
+            if query:
+                store_search_query(query)
             
             return result
 
