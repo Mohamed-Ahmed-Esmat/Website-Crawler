@@ -348,7 +348,7 @@ def crawler_process():
                     "ip_address": ip_address
                 }, dest=0, tag=TAG_HEARTBEAT)
                 last_heartbeat = current_time
-                logging.debug(f"Sent heartbeat to master")
+                logging.info(f"Sent heartbeat to master")
             
             time.sleep(0.1)
             
