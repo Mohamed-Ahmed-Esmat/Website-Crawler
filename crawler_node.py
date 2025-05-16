@@ -14,9 +14,16 @@ import json
 from google.cloud import pubsub_v1
 import signal, os
 
-error_handler = MPI.Errhandler.Create(lambda comm, error: None)
-comm = MPI.COMM_WORLD
-comm.Set_errhandler(error_handler)
+try:
+    error_handler = MPI.Errhandler.Create(lambda comm, error: None)
+except AttributeError:
+    try:
+        error_handler = MPI.Comm.Create_errhandler(lambda comm, error: None)
+        comm = MPI.COMM_WORLD
+        comm.Set_errhandler(error_handler)
+    except AttributeError:
+        logging.warning("Could not create custom MPI error handler. Using default errhandler.")
+        comm = MPI.COMM_WORLD
 
 signal.signal(signal.SIGCHLD, signal.SIG_IGN)
 
