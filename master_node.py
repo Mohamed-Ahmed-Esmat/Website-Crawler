@@ -334,13 +334,18 @@ def master_process():
                                 logging.info(f"Master Job: Crawler {message_source} status: {message_data}")
                                 processed_url = message_data.get('url')
                                 if processed_url and processed_url in current_job_seed_progress: # Check if it's an initial seed
+                                    progress_details = message_data.get("progress", {})
+                                    percentage = progress_details.get("percentage", 0)
+                                    current_progress_text = f"Crawler {message_source} at {percentage}%"
+
                                     if message_data.get("completed_url"):
                                         current_job_seed_progress[processed_url]["status"] = "processed"
-                                        current_job_seed_progress[processed_url]["details"] = f"Successfully processed by crawler {message_source}. Found {message_data.get('urls_found', 0)} new links from this URL."
-                                        logging.info(f"Master Job: Initial seed URL '{processed_url}' confirmed processed by crawler {message_source}.")
-                                    # else: could be an intermediate status for an initial seed, e.g. "working"
-                                    #    current_job_seed_progress[processed_url]["status"] = "processing"
-                                    #    current_job_seed_progress[processed_url]["details"] = f"Currently being processed by crawler {message_source}."
+                                        current_job_seed_progress[processed_url]["details"] = f"Successfully processed by crawler {message_source}. Found {message_data.get('urls_found', 0)} new links. Final progress: {percentage}%"
+                                        logging.info(f"Master Job: Initial seed URL '{processed_url}' confirmed processed by crawler {message_source} at {percentage}%.")
+                                    else: # It's an ongoing progress update for an initial seed
+                                        current_job_seed_progress[processed_url]["status"] = "processing"
+                                        current_job_seed_progress[processed_url]["details"] = current_progress_text
+                                        logging.info(f"Master Job: Progress update for initial seed URL '{processed_url}': {current_progress_text}.")
 
                             elif message_tag == 999: # Crawler node reports error (TAG_ERROR_REPORT)
                                 logging.error(f"Master Job: Crawler {message_source} reported error: {message_data}")

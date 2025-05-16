@@ -761,11 +761,18 @@
                         statusIcon = '<i class="fas fa-exclamation-triangle" style="color: var(--error-color);"></i>'; // Error
                     }
 
+                    // Display the details which now may contain percentage and crawler info
+                    let detailsDisplay = info.details || '';
+                    if (info.status === 'processing' || info.status === 'processed') {
+                        // Make the details more prominent if it contains progress info
+                        detailsDisplay = `<strong>${info.details}</strong>`; 
+                    }
+
                     li.innerHTML = `
                         ${statusIcon} 
                         <span style="font-weight: 500;">${url}</span>: 
                         <span style="color: #374151;">${statusText}</span> 
-                        <small style="color: #6b7280; display: block; font-size: 0.8em; padding-left: 20px;"><em>${info.details || ''}</em></small>
+                        <small style="color: #6b7280; display: block; font-size: 0.9em; padding-left: 20px; margin-top: 2px;"><em>${detailsDisplay}</em></small>
                     `;
                     progressList.appendChild(li);
                 }
