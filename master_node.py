@@ -30,7 +30,6 @@ TAG_SHUTDOWN_MASTER = 13 # New tag for graceful shutdown
 TAG_INDEXER_HEARTBEAT = 97 # Added: For Indexer Heartbeats
 TAG_INDEXER_SEARCH_QUERY = 20 # Master to Indexer for search query
 TAG_INDEXER_SEARCH_RESULTS = 21 # Indexer to Master for search results
-TAG_PROGRESS_UPDATE = 14  # New tag for progress updates
 
 NODE_HEARTBEAT_TIMEOUT = 60 # Seconds. If no heartbeat received within this time, node is considered inactive.
 node_info_map = {} # MODULE-LEVEL GLOBAL: Stores details of connected nodes
@@ -40,85 +39,6 @@ topic_id = "crawl-tasks"
 
 publisher = pubsub_v1.PublisherClient()
 topic_path = publisher.topic_path(project_id, topic_id)
-
-# Track in-flight tasks and their assigned crawlers
-in_flight_tasks = {}  # {task_id: {"url": url, "assigned_to": crawler_rank, "start_time": timestamp}}
-TASK_TIMEOUT = 300  # 5 minutes timeout for tasks
-
-# Add progress tracking
-progress_data = {
-    "crawler_progress": {},
-    "indexer_progress": {},
-    "overall_progress": {
-        "total_urls": 0,
-        "processed_urls": 0,
-        "percentage": 0
-    }
-}
-
-def update_progress(node_rank, node_type, progress_info):
-    """Update progress information for a specific node"""
-    global progress_data
-    
-    if node_type == "crawler":
-        progress_data["crawler_progress"][node_rank] = {
-            "status": progress_info.get("status", "UNKNOWN"),
-            "current_url": progress_info.get("url", ""),
-            "urls_found": progress_info.get("urls_found", 0),
-            "depth": progress_info.get("depth", 0),
-            "progress": progress_info.get("progress", {"current": 0, "total": 0, "percentage": 0})
-        }
-    elif node_type == "indexer":
-        progress_data["indexer_progress"][node_rank] = {
-            "status": progress_info.get("status", "UNKNOWN"),
-            "current_task": progress_info.get("current_task", ""),
-            "progress": progress_info.get("progress", {"current": 0, "total": 0, "percentage": 0})
-        }
-    
-    # Update overall progress
-    total_processed = 0
-    total_urls = 0
-    
-    for crawler_progress in progress_data["crawler_progress"].values():
-        if "progress" in crawler_progress:
-            total_processed += crawler_progress["progress"].get("current", 0)
-            total_urls += crawler_progress["progress"].get("total", 0)
-    
-    progress_data["overall_progress"] = {
-        "total_urls": total_urls,
-        "processed_urls": total_processed,
-        "percentage": round((total_processed / total_urls * 100) if total_urls > 0 else 0, 1)
-    }
-
-def check_in_flight_tasks():
-    """
-    Check for tasks that have been in-flight too long and re-queue them.
-    Returns True if any tasks were re-queued.
-    """
-    global in_flight_tasks, urls_to_crawl_queue
-    current_time = time.time()
-    re_queued = False
-    
-    # Check each in-flight task
-    for task_id, task_info in list(in_flight_tasks.items()):
-        crawler_rank = task_info["assigned_to"]
-        start_time = task_info["start_time"]
-        
-        # If task has timed out or crawler is marked inactive
-        if (current_time - start_time > TASK_TIMEOUT or 
-            crawler_rank not in node_info_map or 
-            not node_info_map[crawler_rank].get("active", False)):
-            
-            # Re-queue the URL
-            url = task_info["url"]
-            urls_to_crawl_queue.insert(0, url)  # Add to front of queue
-            logging.warning(f"Task {task_id} (URL: {url}) timed out or crawler {crawler_rank} failed. Re-queuing.")
-            
-            # Remove from in-flight tasks
-            del in_flight_tasks[task_id]
-            re_queued = True
-    
-    return re_queued
 
 # --- Helper function to get node statuses ---
 def get_updated_node_statuses(): # No parameters needed if using global node_info_map and NODE_HEARTBEAT_TIMEOUT
@@ -240,11 +160,6 @@ def handle_server_requests(comm, status):
             comm.recv(source=source_rank, tag=TAG_SHUTDOWN_MASTER) 
             job_info_to_return = {"type": "shutdown"}
 
-        elif tag == TAG_PROGRESS_UPDATE:
-            comm.recv(source=source_rank, tag=TAG_PROGRESS_UPDATE)
-            comm.send(progress_data, dest=source_rank, tag=TAG_PROGRESS_UPDATE)
-            return None
-
         else:
             # Handle other unexpected tags from server if necessary
             logging.warning(f"Master: Received message with unhandled tag {tag} from server (rank {source_rank})")
@@ -315,7 +230,7 @@ def master_process():
             job_seed_urls = current_job_details["seed_urls"]
             job_max_depth = current_job_details["max_depth"]
             job_reply_to_rank = current_job_details["reply_to_rank"]
-            job_reply_tag = current_details["reply_tag"]
+            job_reply_tag = current_job_details["reply_tag"]
 
             logging.info(f"Master: Starting new crawl job. Seeds: {job_seed_urls}, Depth: {job_max_depth}. Will reply to rank {job_reply_to_rank} with tag {job_reply_tag}.")
 
@@ -347,21 +262,18 @@ def master_process():
                         message_tag = status.Get_tag()
 
                         # Avoid re-processing a server message if it slipped through
-                        if message_source == 1 and message_tag in [TAG_START_CRAWLING, TAG_SEARCH, TAG_NODES_STATUS, TAG_PROGRESS_UPDATE]:
-                            logging.debug(f"Master: Server message (source {message_source}, tag {message_tag}) detected during job.")
+                        if message_source == 1 and message_tag in [TAG_START_CRAWLING, TAG_SEARCH, TAG_NODES_STATUS]:
+                            logging.debug(f"Master: Server message (source {message_source}, tag {message_tag}) detected during job. Will be handled in next outer loop.")
                         else:
                             # Process message (assumed from a crawler)
                             message_data = comm.recv(source=message_source, tag=message_tag)
                             if message_tag == 1: # Crawler task completed, sent back extracted URLs
                                 job_crawler_tasks_assigned -= 1
-                                task_id = message_data.get('task_id')
-                                if task_id in in_flight_tasks:
-                                    del in_flight_tasks[task_id]  # Remove from in-flight tasks
                                 newly_discovered_urls = message_data.get('urls', [])
                                 if newly_discovered_urls:
                                     for url in newly_discovered_urls:
-                                        crawled_urls_set.add(url)
-                                logging.info(f"Master Job: Crawler {message_source} completed task {task_id}. Job's total unique: {len(crawled_urls_set)}. Job tasks assigned: {job_crawler_tasks_assigned}")
+                                        crawled_urls_set.add(url) # Add to this job's set of found URLs
+                                logging.info(f"Master Job: Crawler {message_source} sent {len(newly_discovered_urls)} URLs. Job's total unique: {len(crawled_urls_set)}. Job tasks assigned: {job_crawler_tasks_assigned}")
                             
                             elif message_tag == 99: # Crawler node reports status/heartbeat
                                 logging.info(f"Master Job: Crawler {message_source} status: {message_data}")
@@ -370,17 +282,15 @@ def master_process():
                                 #job_crawler_tasks_assigned -= 1 # Decrement task count
                             elif message_tag == 98:  # Heartbeat from a crawler
                                 node_ip = message_data.get("ip_address", "N/A")
-                                node_rank = message_data.get("rank", message_source)
+                                node_rank = message_data.get("rank", message_source) # Use message_source as fallback for rank
                                 reported_status = message_data.get("status", "UNKNOWN")
                                 node_info_map[node_rank] = {
                                     "type": "crawler",
                                     "ip": node_ip,
                                     "last_seen": time.time(),
                                     "reported_status": reported_status,
-                                    "active": True
+                                    "active": True # Mark active on heartbeat
                                 }
-                                # Check for in-flight tasks when we get a heartbeat
-                                check_in_flight_tasks()
                                 logging.info(f"Master: Heartbeat/Status from CRAWLER Rank {node_rank} (IP: {node_ip}). Status: {reported_status}. Node map updated.")
                             elif message_tag == TAG_INDEXER_HEARTBEAT: # Added: Handle Indexer Heartbeat
                                 node_ip = message_data.get("ip_address", "N/A")
@@ -393,44 +303,40 @@ def master_process():
                                     "active": True # Mark active on heartbeat
                                 }
                                 logging.info(f"Master: Heartbeat from INDEXER Rank {node_rank} (IP: {node_ip}). Node map updated.")
-                            elif message_tag == TAG_STATUS_UPDATE:
-                                # Update progress for the node
-                                update_progress(message_source, "crawler", message_data)
+                            elif message_tag == 2:  # Page content from crawler
+                                logging.info(f"Master Job: Page content received from Crawler {message_source}. Forwarding to an indexer...")
+                                if active_indexer_node_ranks:
+                                    # Simple load balancing: send to the first available indexer or round-robin
+                                    indexer_rank_to_send = active_indexer_node_ranks[job_task_count % len(active_indexer_node_ranks)]
+                                    comm.send(message_data, dest=indexer_rank_to_send, tag=2) # Forward to specific indexer
+                                else:
+                                    logging.warning("Master Job: No active indexer nodes configured to forward page content.")
                             else:
                                 logging.warning(f"Master Job: Received unhandled message tag {message_tag} from source {message_source}")
                 
                 # Assign new crawling tasks for the current job via Pub/Sub
                 # Limit tasks assigned to be related to crawler_nodes_count (e.g., not to overwhelm Pub/Sub or crawlers)
-                while urls_to_crawl_queue and job_crawler_tasks_assigned < crawler_nodes_count * 2:
+                while urls_to_crawl_queue and job_crawler_tasks_assigned < crawler_nodes_count * 2: # Example: allow up to 2 tasks per nominal crawler
                     url_to_crawl = urls_to_crawl_queue.pop(0)
                     current_task_id_in_job = job_task_count
                     job_task_count += 1
                     
-                    task_metadata = {
-                        "task_id": current_task_id_in_job,
-                        "urls": [url_to_crawl], 
-                        "max_depth": job_max_depth
-                    }
+                    task_metadata = {"urls": [url_to_crawl], "max_depth": job_max_depth} # Use current job's max_depth
                     
                     message_json = json.dumps(task_metadata)
                     message_bytes = message_json.encode("utf-8")
                     try:
                         future = publisher.publish(topic_path, message_bytes)
-                        message_id = future.result(timeout=10)
-                        
-                        # Track this task as in-flight
-                        in_flight_tasks[current_task_id_in_job] = {
-                            "url": url_to_crawl,
-                            "assigned_to": None,  # Will be updated when crawler acknowledges
-                            "start_time": time.time()
-                        }
-                        
-                        logging.info(f"Master Job: Published task {current_task_id_in_job} (crawl {url_to_crawl}, depth {job_max_depth}) to Pub/Sub. Tasks assigned for job: {job_crawler_tasks_assigned + 1}. Message ID: {message_id}")
+                        # future.result() # Ensure publishing is complete, can be blocking
+                        logging.info(f"Master Job: Published task {current_task_id_in_job} (crawl {url_to_crawl}, depth {job_max_depth}) to Pub/Sub. Tasks assigned for job: {job_crawler_tasks_assigned + 1}. Message ID: {future.result(timeout=10)}")
                         job_crawler_tasks_assigned += 1
                     except Exception as e:
                         logging.error(f"Master Job: Failed to publish task {current_task_id_in_job} to Pub/Sub: {e}. Re-adding '{url_to_crawl}' to queue.")
-                        urls_to_crawl_queue.insert(0, url_to_crawl)
-                        break
+                        urls_to_crawl_queue.insert(0, url_to_crawl) # Re-add to front of queue
+                        # Potentially break from this assignment loop if Pub/Sub is failing repeatedly
+                        break 
+                    
+                    time.sleep(0.05) # Small delay between Pub/Sub posts
                 
                 time.sleep(0.2) # Main job processing loop sleep, check for crawler results/assign tasks
 

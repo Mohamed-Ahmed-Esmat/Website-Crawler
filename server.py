@@ -11,7 +11,6 @@ TAG_START_CRAWLING = 10
 TAG_SEARCH = 11
 TAG_NODES_STATUS = 12
 TAG_SHUTDOWN_MASTER = 13
-TAG_PROGRESS_UPDATE = 14  # New tag for progress updates
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
@@ -137,17 +136,6 @@ def shutdown_master_endpoint():
     except Exception as e:
         logging.error(f"Server (rank {rank}): General error during master shutdown: {e}")
         return jsonify({"error": f"Server error during master shutdown: {str(e)}"}), 500
-
-@app.route('/progress', methods=['GET'])
-def get_progress():
-    """API endpoint to get the current progress of crawling and indexing tasks"""
-    try:
-        comm.send(None, dest=0, tag=TAG_PROGRESS_UPDATE)
-        progress_data = comm.recv(source=0, tag=TAG_PROGRESS_UPDATE)
-        
-        return jsonify(progress_data), 200
-    except Exception as e:
-        return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 def start_server():
     """Start the Flask server"""

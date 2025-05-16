@@ -474,81 +474,6 @@
         .refresh-button:hover {
             background: #e5e7eb;
         }
-
-        .progress-bar-container {
-            background: #f3f4f6;
-            border-radius: 0.5rem;
-            padding: 0.25rem;
-            margin: 1rem 0;
-            position: relative;
-        }
-
-        .progress-bar {
-            height: 1.5rem;
-            background: #e5e7eb;
-            border-radius: 0.375rem;
-            overflow: hidden;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: var(--primary-color);
-            width: 0%;
-            transition: width 0.3s ease;
-        }
-
-        .progress-text {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: var(--text-color);
-            font-weight: 500;
-        }
-
-        .progress-stats {
-            text-align: center;
-            color: #6b7280;
-            font-size: 0.875rem;
-        }
-
-        .node-progress {
-            margin-top: 2rem;
-        }
-
-        .node-progress h4 {
-            margin-bottom: 1rem;
-            color: var(--text-color);
-        }
-
-        .node-progress-item {
-            margin-bottom: 1rem;
-            padding: 1rem;
-            background: #f9fafb;
-            border-radius: 0.5rem;
-        }
-
-        .node-progress-header {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 0.5rem;
-        }
-
-        .node-status {
-            font-size: 0.875rem;
-            padding: 0.25rem 0.5rem;
-            border-radius: 0.25rem;
-        }
-
-        .node-status.active {
-            background: rgba(5, 150, 105, 0.1);
-            color: var(--success-color);
-        }
-
-        .node-status.inactive {
-            background: rgba(220, 38, 38, 0.1);
-            color: var(--error-color);
-        }
     </style>
 </head>
 
@@ -606,37 +531,6 @@
                         <i class="fas fa-play"></i> Start Crawling
                     </button>
                 </form>
-            </div>
-
-            <div id="progress_section" class="card" style="display:none;">
-                <h3><i class="fas fa-chart-line"></i> Crawl Progress</h3>
-                
-                <div class="overall-progress">
-                    <h4>Overall Progress</h4>
-                    <div class="progress-bar-container">
-                        <div class="progress-bar" id="overall_progress_bar">
-                            <div class="progress-fill"></div>
-                        </div>
-                        <div class="progress-text" id="overall_progress_text">0%</div>
-                    </div>
-                    <div class="progress-stats">
-                        <span id="processed_urls">0</span> / <span id="total_urls">0</span> URLs processed
-                    </div>
-                </div>
-
-                <div class="node-progress">
-                    <h4>Crawler Nodes</h4>
-                    <div id="crawler_progress_list">
-                        <!-- Crawler progress bars will be added here -->
-                    </div>
-                </div>
-
-                <div class="node-progress">
-                    <h4>Indexer Nodes</h4>
-                    <div id="indexer_progress_list">
-                        <!-- Indexer progress bars will be added here -->
-                    </div>
-                </div>
             </div>
 
             <div id="crawl_results" class="card" style="display:none;">
@@ -804,104 +698,15 @@
             }
         }
 
-        // Add progress update functionality
-        let progressUpdateInterval;
-
-        function startProgressUpdates() {
-            progressUpdateInterval = setInterval(updateProgress, 1000);
-        }
-
-        function stopProgressUpdates() {
-            if (progressUpdateInterval) {
-                clearInterval(progressUpdateInterval);
-            }
-        }
-
-        async function updateProgress() {
-            try {
-                const response = await fetch('/progress');
-                const data = await response.json();
-
-                if (response.ok) {
-                    updateProgressDisplay(data);
-                }
-            } catch (err) {
-                console.error('Failed to fetch progress:', err);
-            }
-        }
-
-        function updateProgressDisplay(data) {
-            // Update overall progress
-            const overallProgress = data.overall_progress;
-            const progressBar = document.getElementById('overall_progress_bar').querySelector('.progress-fill');
-            const progressText = document.getElementById('overall_progress_text');
-            const processedUrls = document.getElementById('processed_urls');
-            const totalUrls = document.getElementById('total_urls');
-
-            progressBar.style.width = `${overallProgress.percentage}%`;
-            progressText.textContent = `${overallProgress.percentage}%`;
-            processedUrls.textContent = overallProgress.processed_urls;
-            totalUrls.textContent = overallProgress.total_urls;
-
-            // Update crawler progress
-            const crawlerList = document.getElementById('crawler_progress_list');
-            crawlerList.innerHTML = '';
-
-            Object.entries(data.crawler_progress).forEach(([rank, progress]) => {
-                const nodeElement = createNodeProgressElement(rank, progress, 'crawler');
-                crawlerList.appendChild(nodeElement);
-            });
-
-            // Update indexer progress
-            const indexerList = document.getElementById('indexer_progress_list');
-            indexerList.innerHTML = '';
-
-            Object.entries(data.indexer_progress).forEach(([rank, progress]) => {
-                const nodeElement = createNodeProgressElement(rank, progress, 'indexer');
-                indexerList.appendChild(nodeElement);
-            });
-        }
-
-        function createNodeProgressElement(rank, progress, type) {
-            const div = document.createElement('div');
-            div.className = 'node-progress-item';
-            
-            const status = progress.status.toLowerCase();
-            const progressPercentage = progress.progress.percentage || 0;
-            
-            div.innerHTML = `
-                <div class="node-progress-header">
-                    <span>${type.charAt(0).toUpperCase() + type.slice(1)} Node ${rank}</span>
-                    <span class="node-status ${status}">${status.toUpperCase()}</span>
-                </div>
-                <div class="progress-bar-container">
-                    <div class="progress-bar">
-                        <div class="progress-fill" style="width: ${progressPercentage}%"></div>
-                    </div>
-                    <div class="progress-text">${progressPercentage}%</div>
-                </div>
-                <div class="progress-stats">
-                    ${type === 'crawler' ? 
-                        `Processing: ${progress.current_url || 'None'}<br>
-                         URLs found: ${progress.urls_found || 0}<br>
-                         Depth: ${progress.depth || 0}` :
-                        `Processing: ${progress.current_task || 'None'}`
-                    }
-                </div>
-            `;
-            
-            return div;
-        }
-
-        // Modify the crawl form submission to show progress
+        // Crawl form submission
         document.getElementById('crawlForm').addEventListener('submit', async function (e) {
             e.preventDefault();
             const submitButton = this.querySelector('button[type="submit"]');
             setLoading(submitButton, true);
 
-            // Show progress section
-            document.getElementById('progress_section').style.display = 'block';
-            startProgressUpdates();
+            // Clear previous results
+            document.getElementById('crawl_results').style.display = 'none';
+            document.getElementById('crawl_error').style.display = 'none';
 
             try {
                 const seedUrl = document.getElementById('seed_url').value;
@@ -948,14 +753,12 @@
 
                     // Show results container
                     resultsContainer.style.display = 'block';
-                    stopProgressUpdates();
                 } else {
                     // Display error
                     const errorContainer = document.getElementById('crawl_error');
                     const errorMessageElement = document.getElementById('crawl_error_message');
                     errorMessageElement.textContent = data.error || 'An unknown error occurred';
                     errorContainer.style.display = 'block';
-                    stopProgressUpdates();
                 }
             } catch (err) {
                 // Handle network/unexpected errors
@@ -963,7 +766,6 @@
                 const errorMessageElement = document.getElementById('crawl_error_message');
                 errorMessageElement.textContent = `Request failed: ${err.message}`;
                 errorContainer.style.display = 'block';
-                stopProgressUpdates();
             } finally {
                 setLoading(submitButton, false);
             }
