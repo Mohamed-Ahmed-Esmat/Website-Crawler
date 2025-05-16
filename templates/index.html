@@ -841,7 +841,7 @@
         function updateCrawlProgressDisplay(data) {
             const progressList = document.getElementById('crawl_progress_list');
             const liveStatus = document.getElementById('crawl_progress_live_status');
-            progressList.innerHTML = ''; // Clear previous items
+            // progressList.innerHTML = ''; // Clear previous items - We will update existing or add new
 
             if (data.job_active) {
                 liveStatus.textContent = "Live progress updates:";
@@ -851,35 +851,89 @@
 
             if (data.progress && Object.keys(data.progress).length > 0) {
                 for (const [seedUrl, details] of Object.entries(data.progress)) {
-                    const listItem = document.createElement('li');
-                    listItem.className = 'url-item'; // Re-use existing style
+                    let listItem = document.getElementById(`progress-item-${seedUrl.replace(/[^a-zA-Z0-9-_]/g, '-')}`);
                     
                     let statusIcon = 'fas fa-hourglass-start';
                     let statusColor = 'var(--text-color)';
+                    let progressBarColor = 'var(--primary-color)';
+                    let itemBorderColor = 'var(--border-color)';
+
                     if (details.status === 'Processing') {
                         statusIcon = 'fas fa-sync fa-spin';
                         statusColor = 'var(--primary-color)';
+                        progressBarColor = 'var(--primary-color)';
                     } else if (details.status === 'Completed') {
                         statusIcon = 'fas fa-check-circle';
                         statusColor = 'var(--success-color)';
+                        progressBarColor = 'var(--success-color)';
+                        itemBorderColor = 'var(--success-color)';
                     } else if (details.status === 'Error') {
                         statusIcon = 'fas fa-exclamation-circle';
                         statusColor = 'var(--error-color)';
+                        progressBarColor = 'var(--error-color)';
+                        itemBorderColor = 'var(--error-color)';
+                    } else { // Pending
+                        progressBarColor = '#adb5bd'; // A neutral color for pending/initial state
                     }
 
-                    listItem.innerHTML = `
-                        <i class="${statusIcon}" style="color: ${statusColor}; margin-right: 8px;"></i>
-                        <span style="font-weight: 500;">${seedUrl}</span>
-                        <div style="margin-left: 25px; font-size: 0.9em;">
-                            Status: <strong style="color:${statusColor};">${details.status}</strong> (${details.percentage}%)<br>
-                            Detail: ${details.detail || 'N/A'}
-                            ${details.crawler_rank ? `(Crawler: ${details.crawler_rank})` : ''}
-                        </div>
-                    `;
-                    progressList.appendChild(listItem);
+                    if (!listItem) {
+                        listItem = document.createElement('li');
+                        listItem.id = `progress-item-${seedUrl.replace(/[^a-zA-Z0-9-_]/g, '-')}`;
+                        listItem.className = 'url-item'; 
+                        listItem.style.borderLeft = `4px solid ${itemBorderColor}`;
+                        listItem.style.padding = "0.75rem";
+                        listItem.style.marginBottom = "0.5rem";
+                        listItem.style.transition = "border-left-color 0.3s ease-in-out";
+
+                        listItem.innerHTML = `
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                                <span style="font-weight: 500; display: flex; align-items: center;">
+                                    <i class="${statusIcon}" style="color: ${statusColor}; margin-right: 8px; transition: color 0.3s ease-in-out, transform 0.3s ease-in-out;"></i>
+                                    ${seedUrl}
+                                </span>
+                                <span class="percentage-text" style="font-weight: bold; color: ${statusColor}; transition: color 0.3s ease-in-out;">${details.percentage}%</span>
+                            </div>
+                            <div class="progress-bar-container" style="background-color: #e9ecef; border-radius: .25rem; height: 10px; margin-top: 5px; margin-bottom: 8px; overflow: hidden;">
+                                <div class="progress-bar-fill" style="width: ${details.percentage}%; background-color: ${progressBarColor}; height: 100%; border-radius: .25rem; transition: width 0.3s ease-in-out, background-color 0.3s ease-in-out;"></div>
+                            </div>
+                            <div class="details-text" style="font-size: 0.85em; color: #495057;">
+                                Status: <strong class="status-strong" style="color:${statusColor}; transition: color 0.3s ease-in-out;">${details.status}</strong><br>
+                                Detail: <span class="detail-span">${details.detail || 'N/A'}</span>
+                                ${details.crawler_rank ? `(Crawler: <span class="crawler-rank-span">${details.crawler_rank}</span>)` : ''}
+                            </div>
+                        `;
+                        progressList.appendChild(listItem);
+                    } else {
+                        // Update existing list item
+                        listItem.style.borderLeftColor = itemBorderColor;
+                        const iconEl = listItem.querySelector('i');
+                        iconEl.className = statusIcon; // Update icon class for spinning etc.
+                        iconEl.style.color = statusColor;
+                        listItem.querySelector('.percentage-text').textContent = `${details.percentage}%`;
+                        listItem.querySelector('.percentage-text').style.color = statusColor;
+                        listItem.querySelector('.progress-bar-fill').style.width = `${details.percentage}%`;
+                        listItem.querySelector('.progress-bar-fill').style.backgroundColor = progressBarColor;
+                        listItem.querySelector('.status-strong').textContent = details.status;
+                        listItem.querySelector('.status-strong').style.color = statusColor;
+                        listItem.querySelector('.detail-span').textContent = details.detail || 'N/A';
+                        const crawlerRankSpan = listItem.querySelector('.crawler-rank-span');
+                        if (details.crawler_rank && crawlerRankSpan) {
+                            crawlerRankSpan.textContent = details.crawler_rank;
+                        } else if (details.crawler_rank && !crawlerRankSpan) {
+                            // Add crawler rank if it wasn't there before (should be rare with current setup)
+                            listItem.querySelector('.details-text').innerHTML += ` (Crawler: <span class="crawler-rank-span">${details.crawler_rank}</span>)`;
+                        } else if (!details.crawler_rank && crawlerRankSpan) {
+                            // Remove crawler rank if it disappeared (unlikely)
+                             // This part is tricky to do cleanly without re-rendering more; for now, we'll assume it persists or changes.
+                        }
+                    }
                 }
             } else if (data.job_active) {
-                progressList.innerHTML = '<li class="url-item">Waiting for progress data...</li>';
+                 if (progressList.innerHTML === '') { // Only add if list is truly empty
+                    progressList.innerHTML = '<li class="url-item">Waiting for progress data...</li>';
+                 }
+            } else {
+                 progressList.innerHTML = ''; // Clear if job not active and no progress
             }
         }
 
