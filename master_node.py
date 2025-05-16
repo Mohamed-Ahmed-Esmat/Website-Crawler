@@ -27,6 +27,8 @@ TAG_START_CRAWLING = 10
 TAG_SEARCH = 11
 TAG_NODES_STATUS = 12
 TAG_SHUTDOWN_MASTER = 13 # New tag for graceful shutdown
+TAG_CRAWL_PROGRESS_REQUEST = 14 # Server to Master for crawl progress
+TAG_CRAWL_PROGRESS_UPDATE = 15  # Master to Server with crawl progress
 TAG_INDEXER_HEARTBEAT = 97 # Added: For Indexer Heartbeats
 TAG_INDEXER_SEARCH_QUERY = 20 # Master to Indexer for search query
 TAG_INDEXER_SEARCH_RESULTS = 21 # Indexer to Master for search results
@@ -76,7 +78,7 @@ def get_updated_node_statuses(): # No parameters needed if using global node_inf
     return server_status_list
 # --- End Helper --- 
 
-def handle_server_requests(comm, status):
+def handle_server_requests(comm, status, job_active_flag, current_job_seed_progress_data, total_discovered_count_for_job): # Added job status params
     """
     Handle requests from the server node (assumed to be rank 1).
     For TAG_START_CRAWLING, it returns job info to master_process.
@@ -160,6 +162,18 @@ def handle_server_requests(comm, status):
             comm.recv(source=source_rank, tag=TAG_SHUTDOWN_MASTER) 
             job_info_to_return = {"type": "shutdown"}
 
+        elif tag == TAG_CRAWL_PROGRESS_REQUEST: # Added: Handle crawl progress request
+            # Server is asking for the progress of the current/last crawl job
+            comm.recv(source=source_rank, tag=TAG_CRAWL_PROGRESS_REQUEST) # Expecting None or minimal data
+            logging.info(f"Master: Received crawl progress request from server (rank {source_rank})")
+            progress_payload = {
+                "job_active": job_active_flag,
+                "seed_statuses": current_job_seed_progress_data, # dict of seed_url -> {"status": ..., "details": ...}
+                "total_urls_discovered_in_job": total_discovered_count_for_job
+            }
+            comm.send(progress_payload, dest=source_rank, tag=TAG_CRAWL_PROGRESS_UPDATE)
+            logging.info(f"Master: Sent crawl progress update to server (rank {source_rank}). Active: {job_active_flag}, Seeds: {len(current_job_seed_progress_data)}, Discovered: {total_discovered_count_for_job}")
+
         else:
             # Handle other unexpected tags from server if necessary
             logging.warning(f"Master: Received message with unhandled tag {tag} from server (rank {source_rank})")
@@ -180,6 +194,14 @@ def master_process():
     status = MPI.Status()
 
     logging.info(f"Master node (rank {rank}) started with world size {size}.")
+
+    # --- Initialize state for tracking current job progress ---
+    current_job_active = False
+    initial_seed_urls_for_current_job = [] # Stores the original seed URLs for the active job
+    current_job_seed_progress = {} # Stores detailed status for each initial seed URL of the current job
+                                   # e.g., {"http://example.com": {"status": "pending/published/processing/processed/error", "details": "..."}}
+    crawled_urls_set_for_current_job = set() # Stores all unique URLs found in the current job (for total count)
+    # --- End state for tracking current job progress ---
 
     # Node configuration (assuming server is rank 1 and not part of these calcs for crawler/indexer roles)
     # If server (rank 1) is exclusively for API, then it's not a crawler or indexer.
@@ -216,38 +238,36 @@ def master_process():
 
     # Main loop to listen for and process crawl jobs one by one
     while True:
-        if comm.iprobe(source=MPI.ANY_SOURCE, tag=98, status=status) or comm.iprobe(source=MPI.ANY_SOURCE, tag=TAG_INDEXER_HEARTBEAT, status=status):
+        # Handle heartbeats first (non-blocking check)
+        # Check for Crawler Heartbeats (tag 98)
+        if comm.iprobe(source=MPI.ANY_SOURCE, tag=98, status=status):
             message_source = status.Get_source()
-            message_tag = status.Get_tag()
-            message_data = comm.recv(source=message_source, tag=message_tag)
-            if message_tag == 98:  # Heartbeat from a crawler
-                node_ip = message_data.get("ip_address", "N/A")
-                node_rank = message_data.get("rank", message_source) # Use message_source as fallback for rank
-                reported_status = message_data.get("status", "UNKNOWN")
-                node_info_map[node_rank] = {
-                    "type": "crawler",
-                    "ip": node_ip,
-                    "last_seen": time.time(),
-                    "reported_status": reported_status,
-                    "active": True # Mark active on heartbeat
-                }
-                logging.info(f"Master: Heartbeat/Status from CRAWLER Rank {node_rank} (IP: {node_ip}). Status: {reported_status}. Node map updated.")
-            elif message_tag == TAG_INDEXER_HEARTBEAT: # Added: Handle Indexer Heartbeat
-                node_ip = message_data.get("ip_address", "N/A")
-                node_rank = message_data.get("rank", message_source) # Use message_source as fallback for rank
-                node_info_map[node_rank] = {
-                    "type": "indexer",
-                    "ip": node_ip,
-                    "last_seen": time.time(),
-                    "reported_status": "ACTIVE", # Indexer heartbeat implies it's active
-                    "active": True # Mark active on heartbeat
-                }
-                logging.info(f"Master: Heartbeat from INDEXER Rank {node_rank} (IP: {node_ip}). Node map updated.")
+            message_data = comm.recv(source=message_source, tag=98)
+            node_ip = message_data.get("ip_address", "N/A")
+            node_rank = message_data.get("rank", message_source)
+            reported_status = message_data.get("status", "UNKNOWN")
+            node_info_map[node_rank] = {
+                "type": "crawler", "ip": node_ip, "last_seen": time.time(),
+                "reported_status": reported_status, "active": True
+            }
+            logging.info(f"Master: Heartbeat/Status from CRAWLER Rank {node_rank} (IP: {node_ip}). Status: {reported_status}. Node map updated.")
+        
+        # Check for Indexer Heartbeats (TAG_INDEXER_HEARTBEAT)
+        if comm.iprobe(source=MPI.ANY_SOURCE, tag=TAG_INDEXER_HEARTBEAT, status=status):
+            message_source = status.Get_source()
+            message_data = comm.recv(source=message_source, tag=TAG_INDEXER_HEARTBEAT)
+            node_ip = message_data.get("ip_address", "N/A")
+            node_rank = message_data.get("rank", message_source)
+            node_info_map[node_rank] = {
+                "type": "indexer", "ip": node_ip, "last_seen": time.time(),
+                "reported_status": "ACTIVE", "active": True
+            }
+            logging.info(f"Master: Heartbeat from INDEXER Rank {node_rank} (IP: {node_ip}). Node map updated.")
 
         # Check for any incoming requests from the server (rank 1)
         # This call will return job details if a new crawl job is posted, or None otherwise.
-        # It will also handle direct/immediate requests like status or search.
-        current_job_details = handle_server_requests(comm, status)
+        # It will also handle direct/immediate requests like status, search, or progress.
+        current_job_details = handle_server_requests(comm, status, current_job_active, current_job_seed_progress, len(crawled_urls_set_for_current_job))
 
         if current_job_details and current_job_details.get("type") == "shutdown":
             logging.info("Master: Shutdown instruction received. Exiting main processing loop.")
@@ -260,15 +280,23 @@ def master_process():
             job_reply_tag = current_job_details["reply_tag"]
 
             logging.info(f"Master: Starting new crawl job. Seeds: {job_seed_urls}, Depth: {job_max_depth}. Will reply to rank {job_reply_to_rank} with tag {job_reply_tag}.")
+            
+            # --- Reset/Initialize for the new job ---
+            current_job_active = True
+            initial_seed_urls_for_current_job = list(job_seed_urls) # Store the original seeds for this job
+            current_job_seed_progress = {url: {"status": "pending", "details": "Awaiting processing"} for url in initial_seed_urls_for_current_job}
+            crawled_urls_set_for_current_job = set(job_seed_urls) # This set will store ALL unique URLs for THIS job.
+            # --- End Reset/Initialize ---
 
             if not job_seed_urls:
                 logging.warning("Master: Crawl job request received with no seed URLs. Skipping job and notifying server.")
                 comm.send([], dest=job_reply_to_rank, tag=job_reply_tag) # Send empty list for no seeds
+                current_job_active = False # No active job if skipped
                 continue # Go back to waiting for the next job request
 
             # Initialize per-job data structures
-            urls_to_crawl_queue = list(job_seed_urls) # Queue for the current job
-            crawled_urls_set = set(job_seed_urls)     # Set of all unique URLs found in this job
+            urls_to_crawl_queue = list(job_seed_urls) # Queue for the current job, starts with initial seeds
+            # crawled_urls_set was already defined as crawled_urls_set_for_current_job and initialized
             
             job_task_count = 0           # Pub/Sub task counter for this job
             job_crawler_tasks_assigned = 0 # Number of tasks currently assigned to Pub/Sub for this job
@@ -299,15 +327,32 @@ def master_process():
                                 newly_discovered_urls = message_data.get('urls', [])
                                 if newly_discovered_urls:
                                     for url in newly_discovered_urls:
-                                        crawled_urls_set.add(url) # Add to this job's set of found URLs
-                                logging.info(f"Master Job: Crawler {message_source} sent {len(newly_discovered_urls)} URLs. Job's total unique: {len(crawled_urls_set)}. Job tasks assigned: {job_crawler_tasks_assigned}")
+                                        crawled_urls_set_for_current_job.add(url) # Add to this job's set of found URLs
+                                logging.info(f"Master Job: Crawler {message_source} sent {len(newly_discovered_urls)} URLs. Job's total unique: {len(crawled_urls_set_for_current_job)}. Job tasks assigned: {job_crawler_tasks_assigned}")
                             
-                            elif message_tag == 99: # Crawler node reports status/heartbeat
+                            elif message_tag == 99: # Crawler node reports status/heartbeat (TAG_STATUS_UPDATE)
                                 logging.info(f"Master Job: Crawler {message_source} status: {message_data}")
-                            elif message_tag == 999: # Crawler node reports error
+                                processed_url = message_data.get('url')
+                                if processed_url and processed_url in current_job_seed_progress: # Check if it's an initial seed
+                                    if message_data.get("completed_url"):
+                                        current_job_seed_progress[processed_url]["status"] = "processed"
+                                        current_job_seed_progress[processed_url]["details"] = f"Successfully processed by crawler {message_source}. Found {message_data.get('urls_found', 0)} new links from this URL."
+                                        logging.info(f"Master Job: Initial seed URL '{processed_url}' confirmed processed by crawler {message_source}.")
+                                    # else: could be an intermediate status for an initial seed, e.g. "working"
+                                    #    current_job_seed_progress[processed_url]["status"] = "processing"
+                                    #    current_job_seed_progress[processed_url]["details"] = f"Currently being processed by crawler {message_source}."
+
+                            elif message_tag == 999: # Crawler node reports error (TAG_ERROR_REPORT)
                                 logging.error(f"Master Job: Crawler {message_source} reported error: {message_data}")
-                                #job_crawler_tasks_assigned -= 1 # Decrement task count
-                            elif message_tag == 98:  # Heartbeat from a crawler
+                                error_url = message_data.get('url')
+                                if error_url and error_url in current_job_seed_progress: # Check if error for an initial seed
+                                    current_job_seed_progress[error_url]["status"] = "error"
+                                    current_job_seed_progress[error_url]["details"] = message_data.get('error', 'Unknown error from crawler.')
+                                    logging.warning(f"Master Job: Error reported by crawler {message_source} for initial seed URL '{error_url}'.")
+                                #job_crawler_tasks_assigned -= 1 # Decrement task count if error means task is abandoned
+                            elif message_tag == 98:  # Heartbeat from a crawler (already handled at the top of the loop)
+                                # This specific handling here might be redundant if generic heartbeat catcher above is sufficient.
+                                # However, keeping it if there's job-specific logic tied to heartbeats later.
                                 node_ip = message_data.get("ip_address", "N/A")
                                 node_rank = message_data.get("rank", message_source) # Use message_source as fallback for rank
                                 reported_status = message_data.get("status", "UNKNOWN")
@@ -319,7 +364,7 @@ def master_process():
                                     "active": True # Mark active on heartbeat
                                 }
                                 logging.info(f"Master: Heartbeat/Status from CRAWLER Rank {node_rank} (IP: {node_ip}). Status: {reported_status}. Node map updated.")
-                            elif message_tag == TAG_INDEXER_HEARTBEAT: # Added: Handle Indexer Heartbeat
+                            elif message_tag == TAG_INDEXER_HEARTBEAT: # Added: Handle Indexer Heartbeat (already handled at top of loop)
                                 node_ip = message_data.get("ip_address", "N/A")
                                 node_rank = message_data.get("rank", message_source) # Use message_source as fallback for rank
                                 node_info_map[node_rank] = {
@@ -357,9 +402,15 @@ def master_process():
                         # future.result() # Ensure publishing is complete, can be blocking
                         logging.info(f"Master Job: Published task {current_task_id_in_job} (crawl {url_to_crawl}, depth {job_max_depth}) to Pub/Sub. Tasks assigned for job: {job_crawler_tasks_assigned + 1}. Message ID: {future.result(timeout=10)}")
                         job_crawler_tasks_assigned += 1
+                        if url_to_crawl in current_job_seed_progress: # Update status if it's an initial seed
+                            current_job_seed_progress[url_to_crawl]["status"] = "published"
+                            current_job_seed_progress[url_to_crawl]["details"] = f"Task published to Pub/Sub queue. Message ID: {future.result(timeout=1.0)}" # Short timeout for result here
                     except Exception as e:
                         logging.error(f"Master Job: Failed to publish task {current_task_id_in_job} to Pub/Sub: {e}. Re-adding '{url_to_crawl}' to queue.")
                         urls_to_crawl_queue.insert(0, url_to_crawl) # Re-add to front of queue
+                        if url_to_crawl in current_job_seed_progress: # Update status if it's an initial seed and failed to publish
+                            current_job_seed_progress[url_to_crawl]["status"] = "error"
+                            current_job_seed_progress[url_to_crawl]["details"] = f"Failed to publish to Pub/Sub: {e}"
                         # Potentially break from this assignment loop if Pub/Sub is failing repeatedly
                         break 
                     
@@ -368,12 +419,17 @@ def master_process():
                 time.sleep(0.2) # Main job processing loop sleep, check for crawler results/assign tasks
 
             # Current crawl job's inner loop has finished
-            logging.info(f"Master: Crawl job for seeds {job_seed_urls} (depth {job_max_depth}) has completed processing.")
-            logging.info(f"Master: Total unique URLs found for this job: {len(crawled_urls_set)}.")
+            logging.info(f"Master: Crawl job for seeds {initial_seed_urls_for_current_job} (depth {job_max_depth}) has completed processing.")
+            logging.info(f"Master: Total unique URLs found for this job: {len(crawled_urls_set_for_current_job)}.")
             
-            final_urls_list_for_job = list(crawled_urls_set)
+            final_urls_list_for_job = list(crawled_urls_set_for_current_job)
             comm.send(final_urls_list_for_job, dest=job_reply_to_rank, tag=job_reply_tag)
             logging.info(f"Master: Sent final list of {len(final_urls_list_for_job)} URLs to server (rank {job_reply_to_rank}) for the completed job.")
+            
+            # Mark job as inactive after sending final results
+            current_job_active = False 
+            # current_job_seed_progress and initial_seed_urls_for_current_job will be reset when a new job starts.
+            
             logging.info("Master: Ready for next crawl job request from server.")
             
         else:

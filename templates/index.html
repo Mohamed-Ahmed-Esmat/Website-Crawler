@@ -533,6 +533,18 @@
                 </form>
             </div>
 
+            <div id="crawl_progress_section" class="card" style="display:none;">
+                <h3><i class="fas fa-spinner fa-spin"></i> Live Crawl Progress</h3>
+                <p id="crawl_progress_overall_status">Initializing...</p>
+                <div class="results-header">
+                    <span>Seed URL Status:</span>
+                    <span id="total_discovered_in_job_counter" class="results-counter">Total Discovered in Job: 0 URLs</span>
+                </div>
+                <ul id="crawl_progress_list" class="results-list" style="max-height: 200px; overflow-y: auto; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 0.375rem; margin-top: 0.5rem;">
+                    <!-- Progress for each seed URL will be displayed here -->
+                </ul>
+            </div>
+
             <div id="crawl_results" class="card" style="display:none;">
                 <h3><i class="fas fa-list"></i> Crawl Results</h3>
                 <div id="crawl_status" class="success-message" style="display:none;"></div>
@@ -698,19 +710,134 @@
             }
         }
 
+        let progressIntervalId = null; // To store the interval ID for polling progress
+
+        // Function to stop polling for crawl progress
+        function stopCrawlProgressPolling() {
+            if (progressIntervalId) {
+                clearInterval(progressIntervalId);
+                progressIntervalId = null;
+                console.log("Stopped crawl progress polling.");
+            }
+        }
+
+        // Function to update crawl progress UI
+        function updateCrawlProgressUI(progressData) {
+            const progressSection = document.getElementById('crawl_progress_section');
+            const overallStatusElement = document.getElementById('crawl_progress_overall_status');
+            const progressList = document.getElementById('crawl_progress_list');
+            const totalDiscoveredCounter = document.getElementById('total_discovered_in_job_counter');
+
+            if (!progressData || !progressSection) return;
+
+            progressSection.style.display = 'block';
+
+            if (progressData.job_active) {
+                overallStatusElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Crawl job is active. Polling for updates...';
+            } else {
+                overallStatusElement.innerHTML = '<i class="fas fa-check-circle" style="color: var(--success-color);"></i> Crawl job is not currently active. Showing last known status or waiting for new job.';
+                // If job is not active, we might want to stop polling if this is not the initial call.
+                // stopCrawlProgressPolling(); // Or let it continue if server can return last job's final state
+            }
+            
+            totalDiscoveredCounter.textContent = `Total Discovered in Job: ${progressData.total_urls_discovered_in_job || 0} URLs`;
+
+            progressList.innerHTML = ''; // Clear previous items
+
+            if (progressData.seed_statuses && Object.keys(progressData.seed_statuses).length > 0) {
+                for (const [url, info] of Object.entries(progressData.seed_statuses)) {
+                    const li = document.createElement('li');
+                    li.className = 'url-item'; // Re-use some styling
+                    let statusIcon = '<i class="fas fa-hourglass-start" style="color: #6b7280;"></i>'; // Pending
+                    let statusText = info.status ? info.status.charAt(0).toUpperCase() + info.status.slice(1) : 'Unknown';
+                    
+                    if (info.status === 'published') {
+                        statusIcon = '<i class="fas fa-rocket" style="color: var(--primary-color);"></i>'; // Published
+                    } else if (info.status === 'processing') {
+                        statusIcon = '<i class="fas fa-cogs" style="color: var(--warning-color);"></i>'; // Processing
+                    } else if (info.status === 'processed') {
+                        statusIcon = '<i class="fas fa-check-circle" style="color: var(--success-color);"></i>'; // Processed
+                    } else if (info.status === 'error') {
+                        statusIcon = '<i class="fas fa-exclamation-triangle" style="color: var(--error-color);"></i>'; // Error
+                    }
+
+                    li.innerHTML = `
+                        ${statusIcon} 
+                        <span style="font-weight: 500;">${url}</span>: 
+                        <span style="color: #374151;">${statusText}</span> 
+                        <small style="color: #6b7280; display: block; font-size: 0.8em; padding-left: 20px;"><em>${info.details || ''}</em></small>
+                    `;
+                    progressList.appendChild(li);
+                }
+            } else {
+                progressList.innerHTML = '<li>No seed URL progress to display.</li>';
+            }
+        }
+
+        // Function to fetch crawl progress
+        async function fetchCrawlProgress() {
+            try {
+                const response = await fetch('/crawl-progress');
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ error: "Failed to parse progress error response." }));
+                    console.error('Error fetching crawl progress:', response.status, errorData.error);
+                    // Optionally update a specific part of the UI to show this error
+                    const overallStatusElement = document.getElementById('crawl_progress_overall_status');
+                    if (overallStatusElement) {
+                         overallStatusElement.innerHTML = `<i class="fas fa-exclamation-triangle" style="color: var(--error-color);"></i> Error fetching progress: ${errorData.error || response.statusText}`;
+                    }
+                    // Do not stop polling on a single failed request, could be transient.
+                    // If it consistently fails, the user will see it.
+                    return; 
+                }
+                const progressData = await response.json();
+                console.log("Fetched crawl progress:", progressData);
+                updateCrawlProgressUI(progressData);
+
+                // If the job is no longer active according to the progress data, stop polling.
+                // This is important for when the job actually finishes.
+                if (!progressData.job_active && progressIntervalId) {
+                    // Give it one last update then stop.
+                    // The main /start-crawl will eventually return and handle final display.
+                    // We stop polling here to prevent unnecessary calls after job completion.
+                    // The /start-crawl handler will display the final full list.
+                }
+
+            } catch (err) {
+                console.error('Network or other error fetching crawl progress:', err);
+                const overallStatusElement = document.getElementById('crawl_progress_overall_status');
+                if (overallStatusElement) {
+                     overallStatusElement.innerHTML = `<i class="fas fa-exclamation-triangle" style="color: var(--error-color);"></i> Network error fetching progress.`;
+                }
+                // Do not stop polling on a single failed request.
+            }
+        }
+
         // Crawl form submission
         document.getElementById('crawlForm').addEventListener('submit', async function (e) {
             e.preventDefault();
             const submitButton = this.querySelector('button[type="submit"]');
             setLoading(submitButton, true);
 
-            // Clear previous results
+            // Clear previous results and hide progress section initially
             document.getElementById('crawl_results').style.display = 'none';
             document.getElementById('crawl_error').style.display = 'none';
+            const progressSection = document.getElementById('crawl_progress_section');
+            progressSection.style.display = 'block'; // Show it, but it will say "Initializing"
+            document.getElementById('crawl_progress_overall_status').textContent = 'Initializing crawl...';
+            document.getElementById('crawl_progress_list').innerHTML = '';
+
+
+            stopCrawlProgressPolling(); // Stop any previous polling
 
             try {
                 const seedUrl = document.getElementById('seed_url').value;
                 const maxDepth = parseInt(document.getElementById('max_depth').value);
+
+                // Start polling for progress immediately after starting the crawl.
+                // Fetch initial progress right away.
+                fetchCrawlProgress(); 
+                progressIntervalId = setInterval(fetchCrawlProgress, 3000); // Poll every 3 seconds
 
                 const response = await fetch('/start-crawl', {
                     method: 'POST',
@@ -725,15 +852,22 @@
 
                 const data = await response.json();
 
+                // The /start-crawl is blocking and returns when the MASTER confirms job completion.
+                // So, when we get here, the job is done. We should stop polling.
+                stopCrawlProgressPolling();
+                // Fetch one last time to get final status from progress endpoint
+                await fetchCrawlProgress(); 
+
+
                 if (response.ok) {
-                    // Display crawl results
+                    // Display final crawl results from the /start-crawl endpoint
                     const resultsContainer = document.getElementById('crawl_results');
                     const statusElement = document.getElementById('crawl_status');
                     const counterElement = document.getElementById('crawl_counter');
                     const urlsList = document.getElementById('crawl_urls_list');
 
                     // Display status message
-                    statusElement.textContent = data.message;
+                    statusElement.textContent = data.message + " Final results below."; // Modified message
                     statusElement.style.display = 'block';
 
                     // Update counter
@@ -753,19 +887,25 @@
 
                     // Show results container
                     resultsContainer.style.display = 'block';
+                    // Hide progress section if final results are shown, or update its "overall status"
+                    document.getElementById('crawl_progress_overall_status').innerHTML = '<i class="fas fa-check-double" style="color: var(--success-color);"></i> Crawl job completed. Final results displayed below.';
+
                 } else {
-                    // Display error
+                    // Display error from /start-crawl
                     const errorContainer = document.getElementById('crawl_error');
                     const errorMessageElement = document.getElementById('crawl_error_message');
-                    errorMessageElement.textContent = data.error || 'An unknown error occurred';
+                    errorMessageElement.textContent = data.error || 'An unknown error occurred during crawl initiation or completion.';
                     errorContainer.style.display = 'block';
+                    document.getElementById('crawl_progress_overall_status').innerHTML = `<i class="fas fa-exclamation-circle" style="color: var(--error-color);"></i> Crawl job failed or reported an error.`;
                 }
             } catch (err) {
-                // Handle network/unexpected errors
+                 stopCrawlProgressPolling(); // Stop polling on error too
+                // Handle network/unexpected errors from /start-crawl
                 const errorContainer = document.getElementById('crawl_error');
                 const errorMessageElement = document.getElementById('crawl_error_message');
                 errorMessageElement.textContent = `Request failed: ${err.message}`;
                 errorContainer.style.display = 'block';
+                document.getElementById('crawl_progress_overall_status').innerHTML = `<i class="fas fa-exclamation-circle" style="color: var(--error-color);"></i> Network or client-side error during crawl process.`;
             } finally {
                 setLoading(submitButton, false);
             }
