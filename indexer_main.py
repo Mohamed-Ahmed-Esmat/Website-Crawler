@@ -23,6 +23,7 @@ PROJECT_ID = "spheric-arcadia-457314-c8"
 SUBSCRIPTION_NAME = "indexer-sub"
 
 TAG_INDEXER_HEARTBEAT = 97 
+TAG_STATUS_UPDATE = 98
 
 
 comm = MPI.COMM_WORLD
@@ -76,26 +77,69 @@ def handle_message(msg):
             logging.info("✅ Indexer received new crawled content")
             content_data = json.loads(msg.data.decode("utf-8"))
 
+            # Send progress update to master
+            comm.send({
+                "status": "WORKING",
+                "current_task": content_data.get("url", "Unknown URL"),
+                "progress": {
+                    "current": 1,
+                    "total": 1,
+                    "percentage": 0
+                }
+            }, dest=0, tag=TAG_STATUS_UPDATE)
+
             # Feed the state machine manually
             state = "Receiving_Data"
             data = content_data
             progress_point = None
 
             while True:
-                logging.info(f"🌀 Transitioning to state: {state}")
+                logging.info(f"🌀 Transitioning to state: {state}")
+                
+                # Update progress based on state
+                progress_info = {
+                    "status": "WORKING",
+                    "current_task": data.get("url", "Unknown URL") if isinstance(data, dict) else "Processing",
+                    "progress": {
+                        "current": 1,
+                        "total": 1,
+                        "percentage": 0
+                    }
+                }
+                
                 if state == "IDLE":
                     state, data = IndexerStates.idle_state(comm)
+                    progress_info["status"] = "IDLE"
                 elif state == "Receiving_Data":
                     state, data = IndexerStates.receiving_data_state(data, progress_point)
+                    progress_info["progress"]["percentage"] = 25
                 elif state == "Parsing":
                     state, data = IndexerStates.parsing_state(data, progress_point)
+                    progress_info["progress"]["percentage"] = 50
                 elif state == "Indexing":
                     state, data = IndexerStates.indexing_state(data, progress_point)
+                    progress_info["progress"]["percentage"] = 75
                 elif state == "EXIT":
+                    progress_info["status"] = "IDLE"
+                    progress_info["progress"]["percentage"] = 100
                     break
+                
+                # Send progress update
+                comm.send(progress_info, dest=0, tag=TAG_STATUS_UPDATE)
                 progress_point = None
+                
         except Exception as e:
             logging.error(f"⚠️ Error in indexing flow: {e}")
+            # Send error status
+            comm.send({
+                "status": "ERROR",
+                "current_task": "Error occurred",
+                "progress": {
+                    "current": 0,
+                    "total": 1,
+                    "percentage": 0
+                }
+            }, dest=0, tag=TAG_STATUS_UPDATE)
 
 def indexer_node():
     logging.info(f"Indexer node started with size of {size}")

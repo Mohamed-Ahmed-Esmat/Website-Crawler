@@ -113,7 +113,7 @@ def extract_content(url, html_content):
         logging.error(f"Error extracting content from {url}: {e}")
         return [], f"Error extracting content: {e}"
 
-def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=1):
+def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=1, task_id=None):
     global r
     all_new_urls = []
     
@@ -146,7 +146,8 @@ def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=
                         "progress": {
                             "current": processed_urls,
                             "total": total_urls
-                        }
+                        },
+                        "task_id": task_id
                     }, dest=0, tag=TAG_ERROR_REPORT)
                     continue
                     
@@ -162,7 +163,8 @@ def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=
                         "progress": {
                             "current": processed_urls,
                             "total": total_urls
-                        }
+                        },
+                        "task_id": task_id
                     }, dest=0, tag=TAG_ERROR_REPORT)
                     continue
                 
@@ -206,7 +208,8 @@ def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=
                     "current": processed_urls,
                     "total": total_urls,
                     "percentage": round((processed_urls / total_urls) * 100, 1)
-                }
+                },
+                "task_id": task_id
             }, dest=0, tag=TAG_STATUS_UPDATE)
             
         except Exception as e:
@@ -221,25 +224,27 @@ def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=
                 "progress": {
                     "current": processed_urls,
                     "total": total_urls
-                }
+                },
+                "task_id": task_id
             }, dest=0, tag=TAG_ERROR_REPORT)
     
     comm.send({
         "status": STATUS_IDLE,
         "message": f"Completed processing {total_urls} URLs at depth {current_depth}",
-        "batch_complete": True
+        "batch_complete": True,
+        "task_id": task_id
     }, dest=0, tag=TAG_STATUS_UPDATE)
     
     if current_depth < max_depth and all_new_urls:
         if current_depth + 1 <= max_depth:
-            comm.send({"urls": all_new_urls, "depth": current_depth + 1}, dest=0, tag=TAG_STATUS_UPDATE)
-            process_url_batch(all_new_urls, max_depth, comm, rank, session, current_depth + 1)
+            comm.send({"urls": all_new_urls, "depth": current_depth + 1, "task_id": task_id}, dest=0, tag=TAG_STATUS_UPDATE)
+            process_url_batch(all_new_urls, max_depth, comm, rank, session, current_depth + 1, task_id)
         else:
-            comm.send({"urls": all_new_urls, "depth": current_depth + 1}, dest=0, tag=TAG_DISCOVERED_URLS)
-            logging.info(f"Crawler {rank} finished and send to master")
+            comm.send({"urls": all_new_urls, "depth": current_depth + 1, "task_id": task_id}, dest=0, tag=TAG_DISCOVERED_URLS)
+            logging.info(f"Crawler {rank} finished task {task_id} and sent results to master")
     else:
-        comm.send({"urls": all_new_urls, "depth": current_depth + 1}, dest=0, tag=TAG_DISCOVERED_URLS)
-        logging.info(f"Crawler {rank} finished and send to master")
+        comm.send({"urls": all_new_urls, "depth": current_depth + 1, "task_id": task_id}, dest=0, tag=TAG_DISCOVERED_URLS)
+        logging.info(f"Crawler {rank} finished task {task_id} and sent results to master")
         
     return all_new_urls
 
@@ -257,10 +262,17 @@ def pubsub_callback(message):
         crawl_task = json.loads(message.data.decode("utf-8"))
         logging.info(f"Processing crawl task: {crawl_task}")
         
+        # Extract task_id from the message
+        task_id = crawl_task.get("task_id")
+        if not task_id:
+            logging.warning("Received task without task_id, skipping")
+            return
+        
         comm.send({
             "status": STATUS_WORKING,
             "message": "Received new task via Pub/Sub",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
+            "task_id": task_id
         }, dest=0, tag=TAG_STATUS_UPDATE)
         
         if isinstance(crawl_task, dict):
@@ -269,19 +281,20 @@ def pubsub_callback(message):
 
             if urls_batch and all(isinstance(url, str) for url in urls_batch):
                 logging.info(f"Crawler {rank} received batch of {len(urls_batch)} URLs with max depth {max_depth}")
-                process_url_batch(urls_batch, max_depth, comm, rank, session)
+                process_url_batch(urls_batch, max_depth, comm, rank, session, task_id=task_id)
             else:
                 logging.warning(f"Crawler {rank} received invalid URL batch: {urls_batch}")
                 
         else:
             url_to_crawl = crawl_task
             logging.info(f"Crawler {rank} received single URL (legacy format): {url_to_crawl}")
-            process_url_batch([url_to_crawl], 3, comm, rank, session)
+            process_url_batch([url_to_crawl], 3, comm, rank, session, task_id=task_id)
         
         comm.send({
             "status": STATUS_IDLE,
             "message": "Finished processing URL batch from Pub/Sub, waiting for new tasks",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
+            "task_id": task_id
         }, dest=0, tag=TAG_STATUS_UPDATE)
         
     except Exception as e:
@@ -293,7 +306,8 @@ def pubsub_callback(message):
             "status": STATUS_ERROR, 
             "error": error_msg, 
             "stack_trace": stack_trace,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
+            "task_id": task_id if 'task_id' in locals() else None
         }, dest=0, tag=TAG_ERROR_REPORT)
         
         message.nack()
