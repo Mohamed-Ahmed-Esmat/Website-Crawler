@@ -12,18 +12,6 @@ import redis
 import hashlib
 import json
 from google.cloud import pubsub_v1
-import signal, os
-
-try:
-    eh = MPI.Comm.Create_errhandler(lambda comm, errorcode: None)
-    comm = MPI.COMM_WORLD
-    comm.Set_errhandler(eh)
-    logging.info("Successfully created custom MPI error handler")
-except Exception as e:
-    logging.warning(f"Could not create custom MPI error handler: {e}. Using default.")
-    comm = MPI.COMM_WORLD
-
-signal.signal(signal.SIGCHLD, signal.SIG_IGN)
 
 # Configure logging
 hostname = socket.gethostname()

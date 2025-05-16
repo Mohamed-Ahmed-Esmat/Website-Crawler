@@ -67,8 +67,13 @@ def main():
         crawler_process()
     
     # Wait for all processes to finish their tasks
-    comm.Barrier()
-    logging.info(f"{node_type} node with rank {rank} finished")
+    try:
+        comm.Barrier()
+        logging.info(f"{node_type} node with rank {rank} finished normally")
+        return 0
+    except Exception as e:
+        logging.warning(f"{node_type} node with rank {rank} exiting due to MPI error: {e}")
+        return 1
 
 if __name__ == "__main__":
     try:
