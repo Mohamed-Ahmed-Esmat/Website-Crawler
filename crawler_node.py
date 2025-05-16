@@ -152,16 +152,33 @@ def extract_content(url, html_content):
         logging.error(f"Error extracting content from {url}: {e}")
         return [], f"Error extracting content: {e}"
 
-def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=1):
+def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=1, task_initiating_url_for_reporting=None):
     global r
     all_new_urls = []
     hierarchical_urls = []
 
+    total_urls_in_current_batch = len(urls_batch)
+    processed_urls_in_current_batch = 0
+    
+    url_hierarchy = {}
+    for url in urls_batch:
+        url_hierarchy[url] = {
+            "parent": parent_map.get(url, None),
+            "children": [],
+            "depth": current_depth
+        }
     total_urls = len(urls_batch)
     processed_urls = 0
 
+    if task_initiating_url_for_reporting is None and current_depth == 1:
+        task_initiating_url_for_reporting = urls_batch[0] if urls_batch else f"UNKNOWN_INIT_URL_R{rank}_D{current_depth}"
+    elif task_initiating_url_for_reporting is None:
+        task_initiating_url_for_reporting = f"MISSING_INIT_URL_R{rank}_D{current_depth}"
+
     for url in urls_batch:
         try:
+            processed_urls_in_current_batch += 1
+            logging.info(f"Crawler {rank} processing URL: {url} (depth {current_depth}/{max_depth}, task_seed: {task_initiating_url_for_reporting}) - Batch progress: {processed_urls_in_current_batch}/{total_urls_in_current_batch}")
             hierarchical_urls.append(url)
             processed_urls += 1
             logging.info(f"Crawler {rank} processing URL: {url} (depth {current_depth}/{max_depth}) - Progress: {processed_urls}/{total_urls}")
@@ -190,9 +207,10 @@ def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=
                         "status": STATUS_ERROR, 
                         "url": url, 
                         "error": error_msg,
+                        "task_initiating_url": task_initiating_url_for_reporting,
                         "progress": {
-                            "current": processed_urls,
-                            "total": total_urls
+                            "current": processed_urls_in_current_batch,
+                            "total": total_urls_in_current_batch
                         }
                     }, dest=0, tag=TAG_ERROR_REPORT)
                     continue
@@ -206,9 +224,10 @@ def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=
                         "status": STATUS_ERROR, 
                         "url": url, 
                         "error": error_msg,
+                        "task_initiating_url": task_initiating_url_for_reporting,
                         "progress": {
-                            "current": processed_urls,
-                            "total": total_urls
+                            "current": processed_urls_in_current_batch,
+                            "total": total_urls_in_current_batch
                         }
                     }, dest=0, tag=TAG_ERROR_REPORT)
                     continue
@@ -253,13 +272,14 @@ def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=
             comm.send({
                 "status": STATUS_WORKING,
                 "url": url, 
+                "task_initiating_url": task_initiating_url_for_reporting,
                 "urls_found": len(extracted_urls),
                 "depth": current_depth,
                 "completed_url": True,
                 "progress": {
-                    "current": processed_urls,
-                    "total": total_urls,
-                    "percentage": round((processed_urls / total_urls) * 100, 1)
+                    "current": processed_urls_in_current_batch,
+                    "total": total_urls_in_current_batch,
+                    "percentage": round((processed_urls_in_current_batch / total_urls_in_current_batch) * 100, 1) if total_urls_in_current_batch > 0 else 0
                 }
             }, dest=0, tag=TAG_STATUS_UPDATE)
             
@@ -271,17 +291,22 @@ def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=
                 "status": STATUS_ERROR, 
                 "url": url, 
                 "error": error_msg, 
+                "task_initiating_url": task_initiating_url_for_reporting,
                 "stack_trace": stack_trace,
                 "progress": {
-                    "current": processed_urls,
-                    "total": total_urls
+                    "current": processed_urls_in_current_batch,
+                    "total": total_urls_in_current_batch
                 }
             }, dest=0, tag=TAG_ERROR_REPORT)
     
+    is_task_branch_fully_explored_by_this_crawler = not all_new_urls or current_depth >= max_depth
+
     comm.send({
-        "status": STATUS_IDLE,
-        "message": f"Completed processing {total_urls} URLs at depth {current_depth}",
-        "batch_complete": True
+        "status": STATUS_IDLE if is_task_branch_fully_explored_by_this_crawler else STATUS_WORKING,
+        "message": f"Batch from {task_initiating_url_for_reporting} at depth {current_depth} (size {total_urls_in_current_batch}) processed by crawler {rank}.",
+        "batch_complete": is_task_branch_fully_explored_by_this_crawler,
+        "task_initiating_url": task_initiating_url_for_reporting,
+        "progress": {"percentage": 100 if is_task_branch_fully_explored_by_this_crawler else 99}
     }, dest=0, tag=TAG_STATUS_UPDATE)
     
     if current_depth < max_depth and all_new_urls:
@@ -324,14 +349,15 @@ def pubsub_callback(message):
 
             if urls_batch and all(isinstance(url, str) for url in urls_batch):
                 logging.info(f"Crawler {rank} received batch of {len(urls_batch)} URLs with max depth {max_depth}")
-                process_url_batch(urls_batch, max_depth, comm, rank, session)
+                task_initiating_url = urls_batch[0] if urls_batch else f"UNKNOWN_PUBSUB_TASK_R{rank}"
+                process_url_batch(urls_batch, max_depth, comm, rank, session, 1, task_initiating_url)
             else:
                 logging.warning(f"Crawler {rank} received invalid URL batch: {urls_batch}")
                 
         else:
             url_to_crawl = crawl_task
             logging.info(f"Crawler {rank} received single URL (legacy format): {url_to_crawl}")
-            process_url_batch([url_to_crawl], 3, comm, rank, session)
+            process_url_batch([url_to_crawl], 3, comm, rank, session, 1, url_to_crawl)
         
         comm.send({
             "status": STATUS_IDLE,

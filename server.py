@@ -11,8 +11,7 @@ TAG_START_CRAWLING = 10
 TAG_SEARCH = 11
 TAG_NODES_STATUS = 12
 TAG_SHUTDOWN_MASTER = 13
-TAG_CRAWL_PROGRESS_REQUEST = 14 # Server to Master for crawl progress
-TAG_CRAWL_PROGRESS_UPDATE = 15  # Master to Server with crawl progress
+TAG_GET_CRAWL_PROGRESS = 15
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
@@ -116,25 +115,21 @@ def get_system_status():
 
 @app.route('/crawl-progress', methods=['GET'])
 def get_crawl_progress():
-    """API endpoint to get the progress of the current crawl job"""
+    """API endpoint to get the live progress of the current crawl job."""
     try:
-        if rank == 1: # Ensure only server rank interacts with master for this
-            logging.info(f"Server (rank {rank}): Received HTTP request for crawl progress.")
-            comm.send(None, dest=0, tag=TAG_CRAWL_PROGRESS_REQUEST) # Send request to master
-            
-            progress_data = comm.recv(source=0, tag=TAG_CRAWL_PROGRESS_UPDATE) # Receive progress update
-            
-            logging.info(f"Server (rank {rank}): Received crawl progress from master: {progress_data}")
+        if rank == 1: # Ensure only server rank communicates with master for this
+            comm.send(None, dest=0, tag=TAG_GET_CRAWL_PROGRESS)
+            progress_data = comm.recv(source=0, tag=TAG_GET_CRAWL_PROGRESS)
+            # progress_data is expected to be a dict: {"job_active": bool, "progress": {seed_url: {details...}}}
             return jsonify(progress_data), 200
         else:
-            return jsonify({"error": "This MPI rank is not the designated server."}), 403
-            
+            return jsonify({"error": "This rank cannot request crawl progress."}), 403
     except MPI.Exception as mpi_e:
-        logging.error(f"Server (rank {rank}): MPI Error fetching crawl progress: {mpi_e}")
-        return jsonify({"error": f"MPI error fetching crawl progress: {str(mpi_e)}"}), 500
+        logging.error(f"Server (rank {rank}): MPI Error getting crawl progress: {mpi_e}")
+        return jsonify({"error": f"MPI error getting crawl progress: {str(mpi_e)}"}), 500
     except Exception as e:
-        logging.error(f"Server (rank {rank}): General error fetching crawl progress: {e}")
-        return jsonify({"error": f"Server error fetching crawl progress: {str(e)}"}), 500
+        logging.error(f"Server (rank {rank}): General error getting crawl progress: {e}")
+        return jsonify({"error": f"Server error getting crawl progress: {str(e)}"}), 500
 
 @app.route('/shutdown-master', methods=['POST'])
 def shutdown_master_endpoint():
