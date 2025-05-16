@@ -116,10 +116,19 @@ def extract_content(url, html_content):
 def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=1):
     global r
     all_new_urls = []
-    
+    parent_map = {}
+
     total_urls = len(urls_batch)
     processed_urls = 0
     
+    url_hierarchy = {}
+    for url in urls_batch:
+        url_hierarchy[url] = {
+            "parent": parent_map.get(url, None),
+            "children": [],
+            "depth": current_depth
+        }
+
     for url in urls_batch:
         try:
             processed_urls += 1
@@ -134,6 +143,11 @@ def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=
                 extracted_urls = cached_results.get('extracted_urls', [])
                 extracted_text = cached_results.get('extracted_text', '')
                 logging.info(f"Retrieved cached results for {url}, found {len(extracted_urls)} URLs")
+                url_hierarchy[url]["crawled"] = True
+                url_hierarchy[url]["children"] = extracted_urls
+                
+                for child_url in extracted_urls:
+                    parent_map[child_url] = url
             else:
             
                 if not check_robots_txt(url):
@@ -167,6 +181,12 @@ def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=
                     continue
                 
                 extracted_urls, extracted_text = extract_content(url, content)
+
+                url_hierarchy[url]["crawled"] = True
+                url_hierarchy[url]["children"] = extracted_urls
+                
+                for child_url in extracted_urls:
+                    parent_map[child_url] = url
 
                 crawl_results = {
                 'extracted_urls': extracted_urls,
@@ -235,6 +255,7 @@ def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=
             comm.send({"urls": all_new_urls, "depth": current_depth + 1}, dest=0, tag=TAG_STATUS_UPDATE)
             process_url_batch(all_new_urls, max_depth, comm, rank, session, current_depth + 1)
         else:
+            print(url_hierarchy)
             comm.send({"urls": all_new_urls, "depth": current_depth + 1}, dest=0, tag=TAG_DISCOVERED_URLS)
             logging.info(f"Crawler {rank} finished and send to master")
     else:
