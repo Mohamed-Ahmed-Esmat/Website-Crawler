@@ -116,15 +116,24 @@ def extract_content(url, html_content):
 def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=1, task_initiating_url_for_reporting=None):
     global r
     all_new_urls = []
-    
+    parent_map = {}
+
     total_urls_in_current_batch = len(urls_batch)
     processed_urls_in_current_batch = 0
+    
+    url_hierarchy = {}
+    for url in urls_batch:
+        url_hierarchy[url] = {
+            "parent": parent_map.get(url, None),
+            "children": [],
+            "depth": current_depth
+        }
 
     if task_initiating_url_for_reporting is None and current_depth == 1:
         task_initiating_url_for_reporting = urls_batch[0] if urls_batch else f"UNKNOWN_INIT_URL_R{rank}_D{current_depth}"
     elif task_initiating_url_for_reporting is None:
         task_initiating_url_for_reporting = f"MISSING_INIT_URL_R{rank}_D{current_depth}"
-    
+
     for url in urls_batch:
         try:
             processed_urls_in_current_batch += 1
@@ -139,6 +148,11 @@ def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=
                 extracted_urls = cached_results.get('extracted_urls', [])
                 extracted_text = cached_results.get('extracted_text', '')
                 logging.info(f"Retrieved cached results for {url}, found {len(extracted_urls)} URLs")
+                url_hierarchy[url]["crawled"] = True
+                url_hierarchy[url]["children"] = extracted_urls
+                
+                for child_url in extracted_urls:
+                    parent_map[child_url] = url
             else:
             
                 if not check_robots_txt(url):
@@ -174,6 +188,12 @@ def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=
                     continue
                 
                 extracted_urls, extracted_text = extract_content(url, content)
+
+                url_hierarchy[url]["crawled"] = True
+                url_hierarchy[url]["children"] = extracted_urls
+                
+                for child_url in extracted_urls:
+                    parent_map[child_url] = url
 
                 crawl_results = {
                 'extracted_urls': extracted_urls,
@@ -244,10 +264,15 @@ def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=
     }, dest=0, tag=TAG_STATUS_UPDATE)
     
     if current_depth < max_depth and all_new_urls:
-        process_url_batch(all_new_urls, max_depth, comm, rank, session, current_depth + 1, task_initiating_url_for_reporting)
-    
-    comm.send({"urls": all_new_urls, "source_url_batch": urls_batch, "depth": current_depth, "task_initiating_url": task_initiating_url_for_reporting}, dest=0, tag=TAG_DISCOVERED_URLS)
-    logging.info(f"Crawler {rank} sent {len(all_new_urls)} discovered URLs from task {task_initiating_url_for_reporting} (depth {current_depth}) to master.")
+        if current_depth + 1 <= max_depth:
+            comm.send({"urls": all_new_urls, "depth": current_depth + 1}, dest=0, tag=TAG_STATUS_UPDATE)
+            process_url_batch(all_new_urls, max_depth, comm, rank, session, current_depth + 1)
+        else:
+            comm.send({"urls": all_new_urls, "depth": current_depth + 1}, dest=0, tag=TAG_DISCOVERED_URLS)
+            logging.info(f"Crawler {rank} finished and send to master")
+    else:
+        comm.send({"urls": all_new_urls, "depth": current_depth + 1}, dest=0, tag=TAG_DISCOVERED_URLS)
+        logging.info(f"Crawler {rank} finished and send to master")
         
     return all_new_urls
 
