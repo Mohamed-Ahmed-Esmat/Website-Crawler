@@ -178,11 +178,8 @@ def master_process():
     rank = comm.Get_rank()
     size = comm.Get_size()
     status = MPI.Status()
-    
-    global node_info_map
 
-    # node_info_map is now global, master_process will use the global instance.
-    logging.info(f"Master node (rank {rank}) started with world size {size}. Using global node_info_map.")
+    logging.info(f"Master node (rank {rank}) started with world size {size}.")
 
     # Node configuration (assuming server is rank 1 and not part of these calcs for crawler/indexer roles)
     # If server (rank 1) is exclusively for API, then it's not a crawler or indexer.
@@ -219,6 +216,33 @@ def master_process():
 
     # Main loop to listen for and process crawl jobs one by one
     while True:
+        if comm.iprobe(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status):
+            message_source = status.Get_source()
+            message_tag = status.Get_tag()
+        if message_tag == 98:  # Heartbeat from a crawler
+            node_ip = message_data.get("ip_address", "N/A")
+            node_rank = message_data.get("rank", message_source) # Use message_source as fallback for rank
+            reported_status = message_data.get("status", "UNKNOWN")
+            node_info_map[node_rank] = {
+                "type": "crawler",
+                "ip": node_ip,
+                "last_seen": time.time(),
+                "reported_status": reported_status,
+                "active": True # Mark active on heartbeat
+            }
+            logging.info(f"Master: Heartbeat/Status from CRAWLER Rank {node_rank} (IP: {node_ip}). Status: {reported_status}. Node map updated.")
+        elif message_tag == TAG_INDEXER_HEARTBEAT: # Added: Handle Indexer Heartbeat
+            node_ip = message_data.get("ip_address", "N/A")
+            node_rank = message_data.get("rank", message_source) # Use message_source as fallback for rank
+            node_info_map[node_rank] = {
+                "type": "indexer",
+                "ip": node_ip,
+                "last_seen": time.time(),
+                "reported_status": "ACTIVE", # Indexer heartbeat implies it's active
+                "active": True # Mark active on heartbeat
+            }
+            logging.info(f"Master: Heartbeat from INDEXER Rank {node_rank} (IP: {node_ip}). Node map updated.")
+
         # Check for any incoming requests from the server (rank 1)
         # This call will return job details if a new crawl job is posted, or None otherwise.
         # It will also handle direct/immediate requests like status or search.
