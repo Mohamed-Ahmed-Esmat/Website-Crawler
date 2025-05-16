@@ -66,12 +66,8 @@ def main():
         from crawler_node import crawler_process
         crawler_process()
     
-    
-    try:
-        comm.Barrier()
-    except Exception as e:
-        logging.error(f"Barrier failed at rank {rank}: {e}", exc_info=True)
-    
+    # Wait for all processes to finish their tasks
+    comm.Barrier()
     logging.info(f"{node_type} node with rank {rank} finished")
 
 if __name__ == "__main__":
