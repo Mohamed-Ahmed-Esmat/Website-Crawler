@@ -168,12 +168,13 @@ def handle_server_requests(comm, status):
 
     return job_info_to_return
 
-def master_process(comm):
+def master_process():
     """
     Main process for the master node.
     Handles task distribution, worker management, and coordination.
     Now operates in a job-oriented manner, processing one crawl job at a time.
     """
+    comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     size = comm.Get_size()
     status = MPI.Status()

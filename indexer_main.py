@@ -25,6 +25,9 @@ SUBSCRIPTION_NAME = "indexer-sub"
 TAG_INDEXER_HEARTBEAT = 97 
 
 
+comm = MPI.COMM_WORLD
+size = comm.Get_size()
+
 hostname = socket.gethostname()
 try:
     ip_address = socket.gethostbyname(hostname)
@@ -94,12 +97,7 @@ def handle_message(msg):
         except Exception as e:
             logging.error(f"⚠️ Error in indexing flow: {e}")
 
-def indexer_node(comm1):
-    global comm
-    comm = comm1
-    global size
-    size = comm.Get_size()
-
+def indexer_node():
     logging.info(f"Indexer node started with size of {size}")
 
     try:

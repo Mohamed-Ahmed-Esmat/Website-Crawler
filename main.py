@@ -3,7 +3,6 @@ import logging
 import sys
 import os
 import socket
-import signal
 
 # Configure logging
 hostname = socket.gethostname()
@@ -21,12 +20,6 @@ logging.basicConfig(
     ]
 )
 
-def handle_sigterm(signum, frame):
-    os._exit(1)
-
-signal.signal(signal.SIGTERM, signal.SIG_DFL)
-signal.signal(signal.SIGINT, signal.SIG_DFL)
-
 def main():
     """
     Entry point for the distributed web crawler.
@@ -34,12 +27,7 @@ def main():
     and runs the appropriate function.
     """
     # Initialize MPI
-    if not MPI.Is_initialized():
-        MPI.Init()
-    
     comm = MPI.COMM_WORLD
-    comm.Set_errhandler(MPI.ERRORS_RETURN)  # Prevent automatic abort
-    
     rank = comm.Get_rank()
     size = comm.Get_size()
     
@@ -60,30 +48,30 @@ def main():
             logging.info(f"Process {rank} starting as Master node")
             # Import master module and run master process
             from master_node import master_process
-            master_process(comm)
+            master_process()
         elif rank == 1:  # server node
             node_type = "Server"
             logging.info(f"Process {rank} starting as Server")
             from server import start_server
-            start_server(comm)
+            start_server()
         elif rank == size - 1:  # Last rank is the indexer
             node_type = "Indexer"
             logging.info(f"Process {rank} starting as Indexer node")
             # Import indexer module and run indexer process
             from indexer_main import indexer_node
-            indexer_node(comm)
+            indexer_node()
         elif rank == size - 2:  # Second last rank is also an indexer
             node_type = "Indexer"
             logging.info(f"Process {rank} starting as Indexer node")
             # Import indexer module and run indexer process
             from indexer_main import indexer_node
-            indexer_node(comm)
+            indexer_node()
         else:  # Other ranks are crawlers
             node_type = "Crawler"
             logging.info(f"Process {rank} starting as Crawler node")
             # Import crawler module and run crawler process
             from crawler_node import crawler_process
-            crawler_process(comm)
+            crawler_process()
     else:
         # Determine role based on rank
         if rank == 0:
@@ -91,24 +79,24 @@ def main():
             logging.info(f"Process {rank} starting as Master node")
             # Import master module and run master process
             from master_node import master_process
-            master_process(comm)
+            master_process()
         elif rank == 1:  # server node
             node_type = "Server"
             logging.info(f"Process {rank} starting as Server")
             from server import start_server
-            start_server(comm)
+            start_server()
         elif rank == size - 1:  # Last rank is the indexer
             node_type = "Indexer"
             logging.info(f"Process {rank} starting as Indexer node")
             # Import indexer module and run indexer process
             from indexer_main import indexer_node
-            indexer_node(comm)
+            indexer_node()
         else:  # Other ranks are crawlers
             node_type = "Crawler"
             logging.info(f"Process {rank} starting as Crawler node")
             # Import crawler module and run crawler process
             from crawler_node import crawler_process
-            crawler_process(comm)
+            crawler_process()
     
     # Wait for all processes to finish their tasks
     comm.Barrier()
