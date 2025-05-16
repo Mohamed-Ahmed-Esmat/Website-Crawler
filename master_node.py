@@ -216,9 +216,10 @@ def master_process():
 
     # Main loop to listen for and process crawl jobs one by one
     while True:
-        if comm.iprobe(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status):
+        if comm.iprobe(source=MPI.ANY_SOURCE, tag=98, status=status) or comm.iprobe(source=MPI.ANY_SOURCE, tag=TAG_INDEXER_HEARTBEAT, status=status):
             message_source = status.Get_source()
             message_tag = status.Get_tag()
+            message_data = comm.recv(source=message_source, tag=message_tag)
             if message_tag == 98:  # Heartbeat from a crawler
                 node_ip = message_data.get("ip_address", "N/A")
                 node_rank = message_data.get("rank", message_source) # Use message_source as fallback for rank
