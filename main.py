@@ -3,9 +3,6 @@ import logging
 import sys
 import os
 import socket
-from mpi4py.util import pkl5
-
-pkl5.Pickle5()
 
 # Configure logging
 hostname = socket.gethostname()
