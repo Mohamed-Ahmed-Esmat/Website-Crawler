@@ -24,7 +24,8 @@ logging.basicConfig(
 def handle_sigterm(signum, frame):
     os._exit(1)
 
-signal.signal(signal.SIGTERM, handle_sigterm)
+signal.signal(signal.SIGTERM, signal.SIG_DFL)
+signal.signal(signal.SIGINT, signal.SIG_DFL)
 
 def main():
     """
