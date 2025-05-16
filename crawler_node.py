@@ -65,45 +65,6 @@ comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 size = comm.Get_size()
 
-def construct_hierarchical_urls():
-    global hierarchical_urls, r, rank
-    
-    if not hierarchical_urls or len(hierarchical_urls) < 2:
-        logging.warning("Not enough data to construct hierarchical URL structure")
-        return
-    
-    url_tree = {}
-    current_parent = None
-    
-    for item in hierarchical_urls:
-        if isinstance(item, str):
-            current_parent = item
-            url_tree[current_parent] = {
-                "url": current_parent,
-                "children": [],
-                "depth": None, 
-                "url_count": 0
-            }
-        elif isinstance(item, dict) and current_parent is not None:
-            url_tree[current_parent]["depth"] = item.get("depth", 0)
-            url_tree[current_parent]["url_count"] = item.get("length", 0)
-            
-            for child_url in item.get("extracted_urls", []):
-                url_tree[current_parent]["children"].append({
-                    "url": child_url,
-                    "is_leaf": True  
-                })
-    
-    root_urls = [url for url in url_tree.keys() if url_tree[url]["depth"] == 1]
-    final_tree = {
-        "root_urls": root_urls,
-        "url_nodes": url_tree
-    }
-    
-    logging.info(f"Constructed hierarchical URL tree with {len(url_tree)} nodes and {len(root_urls)} root URLs")
-    
-    return final_tree
-
 def hash_url(url):
     return hashlib.sha256(url.encode()).hexdigest()
 
@@ -155,18 +116,10 @@ def extract_content(url, html_content):
 def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=1, task_initiating_url_for_reporting=None):
     global r
     all_new_urls = []
-    hierarchical_urls = []
 
     total_urls_in_current_batch = len(urls_batch)
     processed_urls_in_current_batch = 0
     
-    url_hierarchy = {}
-    for url in urls_batch:
-        url_hierarchy[url] = {
-            "parent": parent_map.get(url, None),
-            "children": [],
-            "depth": current_depth
-        }
     total_urls = len(urls_batch)
     processed_urls = 0
 
@@ -179,7 +132,6 @@ def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=
         try:
             processed_urls_in_current_batch += 1
             logging.info(f"Crawler {rank} processing URL: {url} (depth {current_depth}/{max_depth}, task_seed: {task_initiating_url_for_reporting}) - Batch progress: {processed_urls_in_current_batch}/{total_urls_in_current_batch}")
-            hierarchical_urls.append(url)
             processed_urls += 1
             logging.info(f"Crawler {rank} processing URL: {url} (depth {current_depth}/{max_depth}) - Progress: {processed_urls}/{total_urls}")
             
@@ -192,12 +144,6 @@ def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=
                 extracted_urls = cached_results.get('extracted_urls', [])
                 extracted_text = cached_results.get('extracted_text', '')
                 logging.info(f"Retrieved cached results for {url}, found {len(extracted_urls)} URLs")
-                map = {
-                    "length": len(extracted_urls),
-                    "extracted_urls": extracted_urls,
-                    "depth": current_depth,
-                }
-                hierarchical_urls.append(map)
             else:
             
                 if not check_robots_txt(url):
@@ -244,13 +190,6 @@ def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=
                 r.hset(REDIS_CRAWL_RESULTS_HASH, url_hash, json.dumps(crawl_results))
                 
                 logging.info(f"Crawler {rank} crawled {url}, extracted {len(extracted_urls)} URLs (depth {current_depth}/{max_depth})")
-                
-                map = {
-                    "length": len(extracted_urls),
-                    "extracted_urls": extracted_urls,
-                    "depth": current_depth,
-                }
-                hierarchical_urls.append(map)
 
                 time.sleep(1)
             
@@ -317,7 +256,6 @@ def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=
             comm.send({"urls": all_new_urls, "depth": current_depth + 1}, dest=0, tag=TAG_DISCOVERED_URLS)
             logging.info(f"Crawler {rank} finished and send to master")
     else:
-        print(construct_hierarchical_urls())
         comm.send({"urls": all_new_urls, "depth": current_depth + 1}, dest=0, tag=TAG_DISCOVERED_URLS)
         logging.info(f"Crawler {rank} finished and send to master")
         
