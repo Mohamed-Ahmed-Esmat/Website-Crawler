@@ -12,6 +12,13 @@ import redis
 import hashlib
 import json
 from google.cloud import pubsub_v1
+import signal, os
+
+error_handler = MPI.Errhandler.Create(lambda comm, error: None)
+comm = MPI.COMM_WORLD
+comm.Set_errhandler(error_handler)
+
+signal.signal(signal.SIGCHLD, signal.SIG_IGN)
 
 # Configure logging
 hostname = socket.gethostname()
