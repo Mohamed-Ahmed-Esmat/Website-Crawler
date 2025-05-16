@@ -27,7 +27,9 @@ def main():
     and runs the appropriate function.
     """
     # Initialize MPI
+    MPI.Init_thread(MPI.THREAD_MULTIPLE)
     comm = MPI.COMM_WORLD
+    comm.Set_errhandler(MPI.ERRORS_RETURN)
     rank = comm.Get_rank()
     size = comm.Get_size()
     
