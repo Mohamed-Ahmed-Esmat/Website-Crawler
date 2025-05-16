@@ -67,7 +67,7 @@ def main():
         crawler_process()
     
     # Wait for all processes to finish their tasks
-    comm.Barrier()
+    #comm.Barrier()
     logging.info(f"{node_type} node with rank {rank} finished")
 
 if __name__ == "__main__":
