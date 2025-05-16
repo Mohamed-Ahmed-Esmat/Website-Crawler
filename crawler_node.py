@@ -259,6 +259,7 @@ def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=
             comm.send({"urls": all_new_urls, "depth": current_depth + 1}, dest=0, tag=TAG_DISCOVERED_URLS)
             logging.info(f"Crawler {rank} finished and send to master")
     else:
+        print(url_hierarchy)
         comm.send({"urls": all_new_urls, "depth": current_depth + 1}, dest=0, tag=TAG_DISCOVERED_URLS)
         logging.info(f"Crawler {rank} finished and send to master")
         
