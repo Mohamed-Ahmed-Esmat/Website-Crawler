@@ -60,7 +60,7 @@ content_topic_path = publisher.topic_path(PROJECT_ID, CONTENT_TOPIC_NAME)
 # Create Redis connection once as a global variable
 r = redis.Redis(host='10.10.0.2', port=6379, decode_responses=True, password='password123')
 
-# Initialize the MPI communicator
+# Initializee the MPI communicator
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 size = comm.Get_size()
