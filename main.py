@@ -28,7 +28,6 @@ def main():
     """
     # Initialize MPI
     comm = MPI.COMM_WORLD
-    comm.Set_errhandler(MPI.ERRORS_RETURN)
     rank = comm.Get_rank()
     size = comm.Get_size()
     

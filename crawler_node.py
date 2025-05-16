@@ -64,7 +64,6 @@ r = redis.Redis(host='10.10.0.2', port=6379, decode_responses=True, password='pa
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 size = comm.Get_size()
-status = MPI.Status()
 
 def hash_url(url):
     return hashlib.sha256(url.encode()).hexdigest()
@@ -301,44 +300,41 @@ def pubsub_callback(message):
 
 def crawler_process():
     global comm, rank, r
-    comm.Set_errhandler(MPI.ERRORS_RETURN)
 
     r.delete(REDIS_CRAWLED_URLS_SET)
     r.delete(REDIS_CRAWL_RESULTS_HASH)
 
-    try:
-        comm.send({
-            "status": STATUS_IDLE,
-            "timestamp": datetime.now().isoformat(), 
-            "rank": rank,
-            "node_type": "crawler",
-            "ip_address": ip_address
-        }, dest=0, tag=TAG_HEARTBEAT)
-        logging.debug(f"Sent heartbeat to master")
-        
-        time.sleep(0.1)
-        
-        logging.info(f"Crawler node started with rank {rank} of {size}")
-        
-        comm.send({
-            "status": STATUS_IDLE, 
-            "message": "Crawler node initialized and ready",
-            "timestamp": datetime.now().isoformat()
-        }, dest=0, tag=TAG_STATUS_UPDATE)
-        
-        last_heartbeat = time.time()
-        
-        subscriber = pubsub_v1.SubscriberClient()
-        subscription_path = subscriber.subscription_path(PROJECT_ID, SUBSCRIPTION_NAME)
-        
-        flow_control = pubsub_v1.types.FlowControl(max_messages=1)
-        
-        logging.info(f"Subscribing to Pub/Sub subscription: {SUBSCRIPTION_NAME}")
-        streaming_pull_future = subscriber.subscribe(subscription_path, callback=pubsub_callback, flow_control=flow_control)
-        logging.info(f"Listening for messages on {subscription_path}...")
-    except Exception as e:
-        failed_rank = status.Get_source()
-        logging.error(f"Communication failed with rank {failed_rank}: {e}")    
+    
+    comm.send({
+        "status": STATUS_IDLE,
+        "timestamp": datetime.now().isoformat(), 
+        "rank": rank,
+        "node_type": "crawler",
+        "ip_address": ip_address
+    }, dest=0, tag=TAG_HEARTBEAT)
+    logging.debug(f"Sent heartbeat to master")
+    
+    time.sleep(0.1)
+    
+    logging.info(f"Crawler node started with rank {rank} of {size}")
+    
+    comm.send({
+        "status": STATUS_IDLE, 
+        "message": "Crawler node initialized and ready",
+        "timestamp": datetime.now().isoformat()
+    }, dest=0, tag=TAG_STATUS_UPDATE)
+    
+    last_heartbeat = time.time()
+    
+    subscriber = pubsub_v1.SubscriberClient()
+    subscription_path = subscriber.subscription_path(PROJECT_ID, SUBSCRIPTION_NAME)
+    
+    flow_control = pubsub_v1.types.FlowControl(max_messages=1)
+    
+    logging.info(f"Subscribing to Pub/Sub subscription: {SUBSCRIPTION_NAME}")
+    streaming_pull_future = subscriber.subscribe(subscription_path, callback=pubsub_callback, flow_control=flow_control)
+    logging.info(f"Listening for messages on {subscription_path}...")
+    
     try:
         while True:
             current_time = time.time()
