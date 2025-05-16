@@ -432,7 +432,6 @@ def master_process():
             logging.info(f"Master: Crawl job for seeds {job_seed_urls} (depth {job_max_depth}) has completed processing.")
             logging.info(f"Master: Total unique URLs found for this job: {len(crawled_urls_set)}.")
             
-            global is_crawl_job_active # Declare use of global
             is_crawl_job_active = False # Mark job as no longer active for progress reporting
             logging.info(f"Master: Crawl job marked as inactive. Final progress data: {current_job_progress_data}")
 
