@@ -211,28 +211,6 @@ def master_process():
     active_crawler_node_ranks = list(range(1, 1 + crawler_nodes_count)) # Ranks for crawler nodes (original logic)
     active_indexer_node_ranks = list(range(1 + crawler_nodes_count, size)) # Ranks for indexer nodes (original logic)
     
-    global node_info_map
-    current_time = time.time()
-
-    for indexer_rank in active_indexer_node_ranks:
-        node_info_map[indexer_rank] = {
-            "type": "indexer",
-            "ip": "N/A",  # Will be updated with first heartbeat
-            "last_seen": current_time,
-            "reported_status": "IDLE",
-            "active": True
-        }
-    
-    # Add crawler nodes
-    for crawler_rank in active_crawler_node_ranks:
-        node_info_map[crawler_rank] = {
-            "type": "crawler",
-            "ip": "N/A",  # Will be updated with first heartbeat
-            "last_seen": current_time,
-            "reported_status": "IDLE",
-            "active": True
-        }
-
     logging.info(f"Master: Deduced Active Crawler Node MPI Ranks: {active_crawler_node_ranks} (count: {crawler_nodes_count})")
     logging.info(f"Master: Deduced Active Indexer Node MPI Ranks: {active_indexer_node_ranks} (count: {len(active_indexer_node_ranks)})")
     logging.info("Master: Initialized. Waiting for crawl job requests from server (rank 1)...")
