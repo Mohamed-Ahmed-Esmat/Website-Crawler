@@ -27,15 +27,7 @@ def main():
     and runs the appropriate function.
     """
     # Initialize MPI
-    if not MPI.Is_initialized():
-        # Initialize MPI exactly once
-        required = MPI.THREAD_MULTIPLE
-        provided = MPI.Init_thread(required)
-        
-        if provided < MPI.THREAD_SERIALIZED:
-            logging.warning("Insufficient thread support level")
     comm = MPI.COMM_WORLD
-    comm.Set_errhandler(MPI.ERRORS_RETURN)
     rank = comm.Get_rank()
     size = comm.Get_size()
     
