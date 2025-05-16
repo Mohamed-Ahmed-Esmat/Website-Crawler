@@ -105,7 +105,7 @@ class IndexerSearch:
             print("⚠️ Fuzzy search failed.")
 
 # User-specific query history for pinky suggestion
-client = MongoClient("mongodb://localhost:27017/")
+client = MongoClient("mongodb://10.10.0.3:27017/")
 db = client["search_database"]
 search_collection = db["search_history"]
 
@@ -131,7 +131,7 @@ def store_search_query(query, user_id="default_user"):
 
 def upload_search_history_to_gcs():
     try:
-        client = MongoClient("mongodb://localhost:27017/")
+        client = MongoClient("mongodb://10.10.0.3:27017/")
         history = list(client["search_database"]["search_history"].find({}))
 
         os.makedirs("/tmp/search_backup", exist_ok=True)

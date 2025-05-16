@@ -48,7 +48,7 @@ def hash_url(url):
     return hashlib.sha256(url.encode("utf-8")).hexdigest()
 
 def store_indexed_page(url: str, content: str) -> bool:
-    client = MongoClient("mongodb://localhost:27017/")
+    client = MongoClient("mongodb://10.10.0.3:27017/")
     db = client["search_database"]
     pages_collection = db["indexed_pages"]
 

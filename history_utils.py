@@ -1,7 +1,7 @@
 from pymongo import MongoClient
 from datetime import datetime
 
-client = MongoClient("mongodb://localhost:27017/")
+client = MongoClient("mongodb://10.10.0.3:27017/")
 db = client["indexer"]
 history_col = db["search_history"]
 
