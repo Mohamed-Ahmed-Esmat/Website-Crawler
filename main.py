@@ -3,6 +3,7 @@ import logging
 import sys
 import os
 import socket
+import signal
 
 # Configure logging
 hostname = socket.gethostname()
@@ -19,6 +20,11 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
+
+def handle_sigterm(signum, frame):
+    os._exit(1)
+
+signal.signal(signal.SIGTERM, handle_sigterm)
 
 def main():
     """
