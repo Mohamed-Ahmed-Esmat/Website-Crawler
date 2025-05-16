@@ -37,7 +37,6 @@ node_info_map = {} # MODULE-LEVEL GLOBAL: Stores details of connected nodes
 # --- Globals for crawl job progress tracking ---
 current_job_seed_urls = []
 current_job_progress_data = {} # Stores {seed_url: {"status": "Pending/Processing/Completed/Error", "percentage": 0-100, "detail": "", "crawler_rank": None}}
-global is_crawl_job_active
 is_crawl_job_active = False
 # --- End Globals ---
 
@@ -89,6 +88,7 @@ def handle_server_requests(comm, status):
     For TAG_START_CRAWLING, it returns job info to master_process.
     For other tags, it handles them directly and sends a response.
     """
+    global is_crawl_job_active, current_job_progress_data
     job_info_to_return = None
     # Check for messages specifically from source 1 (the server node)
     if comm.iprobe(source=1, tag=MPI.ANY_TAG, status=status):
@@ -164,7 +164,6 @@ def handle_server_requests(comm, status):
         elif tag == TAG_GET_CRAWL_PROGRESS: # New: Handle progress request
             comm.recv(source=source_rank, tag=TAG_GET_CRAWL_PROGRESS) # Expecting None
             logging.info(f"Master: Received crawl progress request from server (rank {source_rank})")
-            global is_crawl_job_active, current_job_progress_data
             comm.send({"job_active": is_crawl_job_active, "progress": current_job_progress_data}, dest=source_rank, tag=TAG_GET_CRAWL_PROGRESS)
             logging.info(f"Master: Sent crawl progress data to server (rank {source_rank}). Active: {is_crawl_job_active}, Progress: {current_job_progress_data}")
 
@@ -188,6 +187,7 @@ def master_process():
     Handles task distribution, worker management, and coordination.
     Now operates in a job-oriented manner, processing one crawl job at a time.
     """
+    global is_crawl_job_active
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     size = comm.Get_size()
@@ -448,7 +448,6 @@ def master_process():
     # The following shutdown logic is now reachable if the loop is broken.
     logging.info("Master node main loop exited. Performing shutdown...")
 
-    global is_crawl_job_active # Ensure job is marked inactive on shutdown too
     is_crawl_job_active = False
 
     # Send shutdown signal to crawler nodes (if they are MPI processes expecting this)
