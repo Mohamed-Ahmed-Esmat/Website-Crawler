@@ -178,6 +178,8 @@ def master_process():
     rank = comm.Get_rank()
     size = comm.Get_size()
     status = MPI.Status()
+    
+    global node_info_map
 
     # node_info_map is now global, master_process will use the global instance.
     logging.info(f"Master node (rank {rank}) started with world size {size}. Using global node_info_map.")
