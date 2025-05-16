@@ -99,6 +99,7 @@ def handle_message(msg):
 
 def indexer_node():
     logging.info(f"Indexer node started with size of {size}")
+    comm.Set_errhandler(MPI.ERRORS_RETURN)
 
     try:
         subscriber = pubsub_v1.SubscriberClient()

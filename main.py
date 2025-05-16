@@ -3,6 +3,9 @@ import logging
 import sys
 import os
 import socket
+from mpi4py.util import pkl5
+
+pkl5.install()
 
 # Configure logging
 hostname = socket.gethostname()
@@ -28,6 +31,7 @@ def main():
     """
     # Initialize MPI
     comm = MPI.COMM_WORLD
+    comm.Set_errhandler(MPI.ERRORS_RETURN)
     rank = comm.Get_rank()
     size = comm.Get_size()
     
