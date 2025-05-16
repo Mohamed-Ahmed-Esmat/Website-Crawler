@@ -37,6 +37,7 @@ node_info_map = {} # MODULE-LEVEL GLOBAL: Stores details of connected nodes
 # --- Globals for crawl job progress tracking ---
 current_job_seed_urls = []
 current_job_progress_data = {} # Stores {seed_url: {"status": "Pending/Processing/Completed/Error", "percentage": 0-100, "detail": "", "crawler_rank": None}}
+global is_crawl_job_active
 is_crawl_job_active = False
 # --- End Globals ---
 
