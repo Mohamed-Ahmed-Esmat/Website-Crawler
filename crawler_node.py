@@ -116,18 +116,12 @@ def extract_content(url, html_content):
 def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=1, task_initiating_url_for_reporting=None):
     global r
     all_new_urls = []
-    parent_map = {}
 
     total_urls_in_current_batch = len(urls_batch)
     processed_urls_in_current_batch = 0
     
-    url_hierarchy = {}
-    for url in urls_batch:
-        url_hierarchy[url] = {
-            "parent": parent_map.get(url, None),
-            "children": [],
-            "depth": current_depth
-        }
+    total_urls = len(urls_batch)
+    processed_urls = 0
 
     if task_initiating_url_for_reporting is None and current_depth == 1:
         task_initiating_url_for_reporting = urls_batch[0] if urls_batch else f"UNKNOWN_INIT_URL_R{rank}_D{current_depth}"
@@ -138,6 +132,8 @@ def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=
         try:
             processed_urls_in_current_batch += 1
             logging.info(f"Crawler {rank} processing URL: {url} (depth {current_depth}/{max_depth}, task_seed: {task_initiating_url_for_reporting}) - Batch progress: {processed_urls_in_current_batch}/{total_urls_in_current_batch}")
+            processed_urls += 1
+            logging.info(f"Crawler {rank} processing URL: {url} (depth {current_depth}/{max_depth}) - Progress: {processed_urls}/{total_urls}")
             
             url_hash = hash_url(url)
 
@@ -148,11 +144,6 @@ def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=
                 extracted_urls = cached_results.get('extracted_urls', [])
                 extracted_text = cached_results.get('extracted_text', '')
                 logging.info(f"Retrieved cached results for {url}, found {len(extracted_urls)} URLs")
-                url_hierarchy[url]["crawled"] = True
-                url_hierarchy[url]["children"] = extracted_urls
-                
-                for child_url in extracted_urls:
-                    parent_map[child_url] = url
             else:
             
                 if not check_robots_txt(url):
@@ -189,12 +180,6 @@ def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=
                 
                 extracted_urls, extracted_text = extract_content(url, content)
 
-                url_hierarchy[url]["crawled"] = True
-                url_hierarchy[url]["children"] = extracted_urls
-                
-                for child_url in extracted_urls:
-                    parent_map[child_url] = url
-
                 crawl_results = {
                 'extracted_urls': extracted_urls,
                 'extracted_text': extracted_text,
@@ -205,7 +190,7 @@ def process_url_batch(urls_batch, max_depth, comm, rank, session, current_depth=
                 r.hset(REDIS_CRAWL_RESULTS_HASH, url_hash, json.dumps(crawl_results))
                 
                 logging.info(f"Crawler {rank} crawled {url}, extracted {len(extracted_urls)} URLs (depth {current_depth}/{max_depth})")
-                
+
                 time.sleep(1)
             
             page_data = {
