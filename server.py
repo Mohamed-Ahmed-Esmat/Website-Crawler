@@ -12,10 +12,6 @@ TAG_SEARCH = 11
 TAG_NODES_STATUS = 12
 TAG_SHUTDOWN_MASTER = 13
 
-comm = MPI.COMM_WORLD
-rank = comm.Get_rank()
-size = comm.Get_size()
-
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 app = Flask(__name__, template_folder="./templates")
@@ -137,12 +133,17 @@ def shutdown_master_endpoint():
         logging.error(f"Server (rank {rank}): General error during master shutdown: {e}")
         return jsonify({"error": f"Server error during master shutdown: {str(e)}"}), 500
 
-def start_server():
+def start_server(comm1):
     """Start the Flask server"""
     port = int(os.environ.get('PORT', 5000))
     debug = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
-    
+    global comm
+    comm = comm1
+    global rank
+    rank = comm.Get_rank()
+    global size
+    size = comm.Get_size()
     app.run(host='0.0.0.0', port=port, debug=debug)
 
 if __name__ == '__main__':
-    start_server()
+    start_server(comm)

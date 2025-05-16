@@ -60,10 +60,7 @@ content_topic_path = publisher.topic_path(PROJECT_ID, CONTENT_TOPIC_NAME)
 # Create Redis connection once as a global variable
 r = redis.Redis(host='10.10.0.2', port=6379, decode_responses=True, password='password123')
 
-# Initializee the MPI communicator
-comm = MPI.COMM_WORLD
-rank = comm.Get_rank()
-size = comm.Get_size()
+
 
 def hash_url(url):
     return hashlib.sha256(url.encode()).hexdigest()
@@ -298,8 +295,14 @@ def pubsub_callback(message):
         
         message.nack()
 
-def crawler_process():
-    global comm, rank, r
+def crawler_process(comm1):
+    global comm
+    comm = comm1
+    global r
+    global rank
+    rank = comm.Get_rank()
+    global size
+    size = comm.Get_size()
 
     r.delete(REDIS_CRAWLED_URLS_SET)
     r.delete(REDIS_CRAWL_RESULTS_HASH)
